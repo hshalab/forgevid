@@ -993,3 +993,19 @@ thread here rather than continuing to look for more — the highest-value,
 least-speculative next work is a real end-to-end purchase (still nobody's
 run one) and the still-open non-engineering items (`NEXT_PUBLIC_
 COMPANY_ADDRESS`, reconciling the two eligibility documents).
+
+**`NEXT_PUBLIC_COMPANY_ADDRESS` closed out same day.** Asked directly
+rather than guess: home address vs. registered-agent address vs. a
+virtual mailbox, since a home address published on a live site is
+effectively public forever. Founder chose the registered-agent-style
+answer but gave a real street address with the apartment number withheld
+— set as `34500 Fremont Blvd, Fremont, CA` (apartment number deliberately
+omitted per instruction). Set on Railway; since it's a `NEXT_PUBLIC_*`
+var, Next.js bakes it in at build time, not read at runtime, so the
+existing value wouldn't have updated without a rebuild — confirmed
+Railway auto-triggered one on the variable change, waited for it, then
+verified against the LIVE site (not just the env var) that both `/terms`
+and `/privacy` now show the real address and the old placeholder string
+is completely gone. Only the two eligibility documents (this session's
+`evidence/PROVENANCE.md` vs. the concurrent session's
+`evidence/XPRIZE-ELIGIBILITY-*`) remain to reconcile before submission.
