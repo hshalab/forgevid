@@ -20,9 +20,9 @@ function truncate(text: string | null, max: number): string {
 export default async function AiDecisionsPage({
   searchParams,
 }: {
-  searchParams: { type?: string }
+  searchParams: Promise<{ type?: string }>
 }) {
-  const type = searchParams?.type
+  const type = (await searchParams)?.type
   const generations = await prisma.aIGeneration.findMany({
     where: type ? { type: type as any } : undefined,
     orderBy: { createdAt: 'desc' },
