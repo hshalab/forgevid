@@ -167,6 +167,7 @@ export default async function AdminOverviewPage() {
                 { href: '/api/admin/revenue', label: 'Revenue API — full JSON breakdown' },
                 { href: '/api/admin/product-insights', label: 'Product insights API' },
                 { href: '/admin/evidence', label: 'Hackathon evidence — users, activation, costs & revenue' },
+                { href: '/admin/leads', label: 'Outbound leads — dealer/realtor/e-commerce pipeline' },
               ].map((t) => (
                 <Link
                   key={t.href}

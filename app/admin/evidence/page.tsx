@@ -16,10 +16,17 @@ export default async function HackathonEvidencePage() {
     ['Repeat users', `${s.repeatUsers} (${retention}%)`],
     ['Videos / completed', `${s.videos} / ${s.completedVideos}`],
     ['Completed exports', s.exports],
-    ['Verified revenue', `$${s.revenueUsd.toFixed(2)}`],
+    ['Verified revenue (self-serve)', `$${s.revenueUsd.toFixed(2)}`],
     ['Recorded AI cost', `$${s.aiCostUsd.toFixed(2)}`],
     ['Consented testimonials', `${s.publicTestimonials} / ${s.testimonials}`],
   ]
+  const outboundCards = [
+    ['Outbound leads', s.outboundLeads],
+    ['Samples sent', s.outboundSampleSent],
+    ['Converted (arms-length)', s.outboundConverted],
+    ['Outbound revenue (arms-length)', `$${s.outboundRevenueUsd.toFixed(2)}`],
+  ]
+  const relatedPartyTotal = s.relatedPartyRevenueUsd + s.outboundRelatedPartyRevenueUsd
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4">
@@ -27,18 +34,36 @@ export default async function HackathonEvidencePage() {
           <h1 className="text-3xl font-bold">Hackathon evidence</h1>
           <p className="text-muted-foreground">Production records since May 19, 2026. No inferred revenue or fabricated users.</p>
         </div>
-        <Button asChild><Link href="/api/admin/hackathon-evidence/csv">Export CSV</Link></Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline"><Link href="/admin/leads">Manage leads</Link></Button>
+          <Button asChild><Link href="/api/admin/hackathon-evidence/csv">Export CSV</Link></Button>
+        </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(([label, value]) => (
           <Card key={String(label)}><CardHeader className="pb-2"><CardDescription>{label}</CardDescription></CardHeader><CardContent className="text-2xl font-bold">{value}</CardContent></Card>
         ))}
       </div>
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Outbound pipeline (dealers, realtors, e-commerce)</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {outboundCards.map(([label, value]) => (
+            <Card key={String(label)}><CardHeader className="pb-2"><CardDescription>{label}</CardDescription></CardHeader><CardContent className="text-2xl font-bold">{value}</CardContent></Card>
+          ))}
+        </div>
+      </div>
+      {relatedPartyTotal > 0 && (
+        <Card className="border-amber-500/40">
+          <CardHeader className="pb-2"><CardDescription>Related-party revenue (excluded above — not arms-length)</CardDescription></CardHeader>
+          <CardContent className="text-2xl font-bold">${relatedPartyTotal.toFixed(2)}</CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader><CardTitle>Evidence definitions</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>Activated: created at least one video. Repeat: created more than one video. Revenue: succeeded Payment rows only. Costs: recorded AI-generation costs only.</p>
-          <p>Marketing spend and other expenses must be reconciled separately if they are not recorded in ForgeVid. Related-party revenue must be identified manually before submission.</p>
+          <p>Activated: created at least one video. Repeat: created more than one video. Self-serve revenue: succeeded Payment rows with `isRelatedParty = false`. Outbound revenue: `Lead.revenueCents` where `isRelatedParty = false` and a conversion date is set — a separate funnel because some pilots are paid outside Stripe (cash, Zelle, invoice). Costs: recorded AI-generation costs only.</p>
+          <p>Related-party (friends/family/team) revenue is flagged per-row at entry time, not inferred after the fact, and is always reported separately from the two totals above.</p>
+          <p>Marketing spend and other expenses must be reconciled separately if they are not recorded in ForgeVid.</p>
           <p>Public testimonials include only feedback whose submitter explicitly checked public-use consent.</p>
         </CardContent>
       </Card>

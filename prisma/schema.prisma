@@ -584,6 +584,9 @@ model Payment {
   description     String?
   metadata        String?
   createdAt       DateTime      @default(now())
+  // Excludes this payment from judged arms-length revenue (friends/family/
+  // team). Defaults false; flip explicitly per row — never inferred.
+  isRelatedParty  Boolean       @default(false)
 
   // Relationships
   userId          String
@@ -853,6 +856,50 @@ model AdCreative {
   @@index([userId])
   @@index([campaignId])
   @@map("ad_creatives")
+}
+
+/// A prospect from outbound/growth work — one row per real business contacted,
+/// independent of whether they ever create a ForgeVid account. Optionally
+/// attributed to the AdCreative (sample video) sent to them, so revenue can
+/// trace back to the specific campaign that produced it. `isRelatedParty`
+/// keeps friends/family pilots out of judged arms-length revenue by
+/// construction instead of relying on manual bookkeeping.
+model Lead {
+  id                 String     @id @default(cuid())
+  userId             String
+  creativeId         String?
+  vertical           String
+  businessName       String
+  contactName        String?
+  contactEmail       String?
+  contactPhone       String?
+  source             String
+  status             LeadStatus @default(NEW)
+  isRelatedParty     Boolean    @default(false)
+  revenueCents       Int?
+  currency           String     @default("usd")
+  testimonialConsent Boolean    @default(false)
+  notes              String?
+  sampleSentAt       DateTime?
+  convertedAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([creativeId])
+  @@index([status])
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  SAMPLE_SENT
+  REPLIED
+  MEETING
+  PILOT
+  PAID
+  RETAINED
+  DEAD
 }
 
 enum VideoStatus {

@@ -11,10 +11,16 @@ export async function GET() {
   const user = await getFreshSessionUser()
   if (!user || !isAdminRole(user.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   const evidence = await getHackathonEvidence()
-  const headers = ['userId', 'email', 'name', 'registeredAt', 'activated', 'repeatUser', 'videos', 'completed', 'exports', 'revenueUsd', 'aiCostUsd', 'testimonial', 'publicTestimonial']
+  const headers = ['userId', 'email', 'name', 'registeredAt', 'activated', 'repeatUser', 'videos', 'completed', 'exports', 'revenueUsd', 'relatedPartyRevenueUsd', 'aiCostUsd', 'testimonial', 'publicTestimonial']
+  const leadHeaders = ['id', 'vertical', 'businessName', 'status', 'isRelatedParty', 'revenueCents', 'testimonialConsent', 'sampleSentAt', 'convertedAt', 'createdAt']
   const lines = [
+    '"Self-serve users"',
     headers.map(csv).join(','),
     ...evidence.rows.map((row) => headers.map((key) => csv((row as any)[key.replace('Usd', '')] ?? (row as any)[key])).join(',')),
+    '',
+    '"Outbound leads (dealers, realtors, e-commerce)"',
+    leadHeaders.map(csv).join(','),
+    ...evidence.leads.map((lead) => leadHeaders.map((key) => csv((lead as any)[key])).join(',')),
   ]
   return new NextResponse(lines.join('\r\n'), {
     headers: {
