@@ -669,3 +669,36 @@ loop has produced its first arms-length paying pilot.
 **Still the actual blocker on judged revenue:** Stripe LIVE mode
 (user-side, flagged repeatedly). No amount of attribution infrastructure
 produces revenue evidence until real payments can be collected.
+
+**Built the rest of that same session, in order, each verified before the
+next started:**
+- `Lead` model + `Payment.isRelatedParty` (migration
+  `20260725173232_add_lead_attribution`, additive-only, applies on next
+  deploy via the existing `prisma migrate deploy` boot step) — closes
+  `ATTR-004`. `getHackathonEvidence()` now reports self-serve and outbound
+  revenue separately, each split arms-length vs. related-party, instead of
+  "must be identified manually." `/admin/leads` is the CRUD UI; the CSV
+  export includes both tables. End-to-end verified against the local dev
+  DB (create → patch → aggregate, with an explicit assertion that a
+  related-party conversion is excluded from the arms-length total).
+- `/admin/ai-decisions` — read-only list of the last 100 `AIGeneration`
+  rows (prompt, result, cost, tokens), filterable by type. `AIGeneration`
+  already stored this; nothing surfaced it. Closes the explainability half
+  of `AI-001` cheaply — no schema change, gated by the existing
+  `app/admin/layout.tsx` RBAC check.
+- `tests/compliance/no-autonomous-outreach.test.ts` — turns the manual
+  COMP-003 grep from `evidence/PROVENANCE.md` into a real Jest test (static
+  source scan: no social-publish API host anywhere in `app/`/`lib`/`scripts`;
+  `emailClip`/`emailSample` only ever send to the operator's own inbox).
+  Verified the test can actually fail: broke the `emailSample` call site on
+  purpose, confirmed red, reverted, confirmed green — then committed.
+- `outbound/PLAYBOOK.md` (local, gitignored) got a section telling future-me
+  to log real movement in `/admin/leads`, not just the CSV — the CSV isn't
+  queryable by the evidence dashboard, so without this the Lead table stays
+  empty forever no matter how much outreach happens.
+
+Left alone on purpose, still: everything under "Explicitly deferred" above,
+plus QR codes/public landing pages (`ATTR-002`/`ATTR-003`) — no public
+traffic exists yet to attribute (outreach is 100% DM, not links), so
+building click-tracking for a channel nobody's using yet would be
+speculative. Revisit once a landing page is actually needed.
