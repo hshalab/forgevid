@@ -41,7 +41,10 @@ export async function GET() {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
-  const leads = await prisma.lead.findMany({ orderBy: { createdAt: 'desc' } })
+  // Scoped to the admin's own leads — ADMIN is a global role, not per-org, so
+  // without this filter any admin account could read every other admin's
+  // outbound pipeline (names, emails, phones, revenue).
+  const leads = await prisma.lead.findMany({ where: { userId: admin.id }, orderBy: { createdAt: 'desc' } })
   return NextResponse.json({ leads })
 }
 
@@ -83,6 +86,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   const { id, sampleSentAt, convertedAt, ...rest } = parsed.data
+  const existing = await prisma.lead.findUnique({ where: { id }, select: { userId: true } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.userId !== admin.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const lead = await prisma.lead.update({
     where: { id },
     data: {
@@ -104,6 +111,10 @@ export async function DELETE(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
+
+  const existing = await prisma.lead.findUnique({ where: { id: parsed.data.id }, select: { userId: true } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.userId !== admin.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   await prisma.lead.delete({ where: { id: parsed.data.id } })
   return NextResponse.json({ success: true })
