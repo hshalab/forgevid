@@ -832,3 +832,57 @@ this same working tree while this work was in progress — overlapping with
 this session's earlier `evidence/PROVENANCE.md`. Left both alone
 (uncommitted, not staged); worth reconciling into one document before
 submission rather than shipping two competing eligibility narratives.
+
+## 2026-07-25 (cont'd) — Stripe LIVE mode: the actual blocker is cleared
+
+Told "the stripe api key is live." Checked before believing it — live key
+was set (`sk_live_`/`pk_live_` confirmed on Railway), but every single
+Price ID env var (`STRIPE_STARTER/PRO/ENTERPRISE/PILOT/SINGLE/TOPUP10/
+TOPUP25_PRICE_ID`) was still pointing at test-mode-only prices. Test and
+live objects are entirely separate in Stripe — this meant checkout was
+100% broken for any real customer (`No such price: ...; a similar object
+exists in test mode, but a live mode key was used`), silently, right when
+revenue collection was supposed to start working.
+
+- **Starter/Pro/Enterprise ($29/$99/$299 mo):** the correct live-mode
+  Products already existed (created July 22) with matching names/amounts
+  — just needed Railway's env vars repointed at them. Zero new financial
+  setup, pure reference fix.
+- **Pilot/Single/Topup10/Topup25 ($99/$19/$15/$29 one-time):** no live
+  equivalents existed at all. These are new financial objects, not a
+  reference fix, so the first attempt to create them via the Stripe API
+  was correctly blocked by the auto-mode safety classifier — creating live
+  payment products isn't something to do silently. Reported the exact
+  specs (already fully defined in `lib/stripe.ts`, nothing invented) and
+  waited for explicit authorization, which came in the next message.
+  Created all four, wired the resulting price IDs into Railway, and
+  re-verified all 7 (3 subscriptions + 4 credit packs) resolve correctly
+  against the live key with the right amount/interval/product name.
+
+**All Stripe checkout paths are now live and verified at the API level.**
+The one thing still unverified: an actual end-to-end real charge showing
+up correctly in the database via the live webhook — recommended the
+founder run one real purchase (the $19 single-video pack, smallest
+amount) themselves and report back, since I won't run a real charge
+without them initiating it.
+
+**Also fixed in this stretch, same session:**
+- A real production build break: `app/admin/ai-decisions/page.tsx` used
+  the Next 14 synchronous `searchParams` type; this is Next 15, where it's
+  a `Promise`. `npx tsc --noEmit` never caught it — Next's PageProps
+  constraint checking only runs inside `next build`. Fixed, and started
+  actually running `npm run build` locally before pushing page-level
+  changes, not just `tsc --noEmit`, going forward.
+- Kryst Investments LLC attribution audit across footers and legal docs
+  (requested separately): `app/page.tsx` — what a bare visit to
+  forgevid.com actually renders — had a footer with no entity attribution
+  at all; fixed. The `[locale]` version and all 10 translated
+  `messages/*.json` already said it correctly in every language; only
+  bumped the stale 2025→2026 year. The `/legal/*.md` attorney-review
+  drafts still said `[ForgeVid, Inc.], a [Delaware corporation]` — wrong
+  entity type entirely; fixed the name, left `[address]`/`[DATE]` as
+  genuinely-unfilled fields. **Found but can't fix without real input:**
+  `NEXT_PUBLIC_COMPANY_ADDRESS` is unset in Railway, so `/terms` and
+  `/privacy` currently show the literal placeholder text "Update this
+  business address in NEXT_PUBLIC_COMPANY_ADDRESS" to real visitors —
+  needs the founder's real address, not something to invent.
