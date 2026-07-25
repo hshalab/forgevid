@@ -45,7 +45,7 @@ jest.mock('@/lib/stripe', () => ({
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     subscription: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
-    payment: { create: jest.fn() },
+    payment: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     user: { findUnique: jest.fn() },
   },
 }))
@@ -168,5 +168,67 @@ describe('Stripe webhook — invoice.payment_succeeded records subscription reve
     const response = await POST(reqWithSignature('good-sig'))
 
     expect(response.status).toBe(200)
+  })
+})
+
+describe('Stripe webhook — charge.refunded reconciles revenue', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('marks a fully-refunded payment REFUNDED so it drops out of revenue', async () => {
+    mockedConstructEvent.mockReturnValue({
+      type: 'charge.refunded',
+      data: { object: { id: 'ch_1', payment_intent: 'pi_456', amount: 9900, amount_refunded: 9900 } },
+    } as any)
+    mockedPayment.findUnique.mockResolvedValue({ id: 'payment-1' } as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedPayment.update).toHaveBeenCalledWith({
+      where: { id: 'payment-1' },
+      data: { status: 'REFUNDED' },
+    })
+  })
+
+  it('reduces the amount (does not mark REFUNDED) for a partial refund', async () => {
+    mockedConstructEvent.mockReturnValue({
+      type: 'charge.refunded',
+      data: { object: { id: 'ch_2', payment_intent: 'pi_789', amount: 9900, amount_refunded: 2000 } },
+    } as any)
+    mockedPayment.findUnique.mockResolvedValue({ id: 'payment-2' } as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedPayment.update).toHaveBeenCalledWith({
+      where: { id: 'payment-2' },
+      data: { amount: 79 },
+    })
+  })
+
+  it('skips cleanly when no Payment row matches the refunded charge', async () => {
+    mockedConstructEvent.mockReturnValue({
+      type: 'charge.refunded',
+      data: { object: { id: 'ch_3', payment_intent: 'pi_unknown', amount: 1900, amount_refunded: 1900 } },
+    } as any)
+    mockedPayment.findUnique.mockResolvedValue(null)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedPayment.update).not.toHaveBeenCalled()
+  })
+
+  it('skips cleanly when the charge has no payment_intent at all', async () => {
+    mockedConstructEvent.mockReturnValue({
+      type: 'charge.refunded',
+      data: { object: { id: 'ch_4', payment_intent: null, amount: 1900, amount_refunded: 1900 } },
+    } as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedPayment.findUnique).not.toHaveBeenCalled()
+    expect(mockedPayment.update).not.toHaveBeenCalled()
   })
 })

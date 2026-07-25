@@ -221,6 +221,39 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case 'charge.refunded': {
+        // Refunded money must never keep counting as earned revenue.
+        // getHackathonEvidence() only sums Payment rows with status
+        // SUCCEEDED, so flipping status (full refund) or reducing amount
+        // (partial refund) here is the whole fix — no change needed there.
+        const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId = (charge.payment_intent as string) || null;
+        if (!paymentIntentId) {
+          console.log(`[Webhook] charge.refunded for ${charge.id} has no payment_intent — cannot map to a Payment row`);
+          break;
+        }
+
+        const payment = await prisma.payment.findUnique({ where: { stripePaymentId: paymentIntentId } });
+        if (!payment) {
+          console.log(`[Webhook] charge.refunded: no Payment row for payment_intent ${paymentIntentId} — nothing to reconcile`);
+          break;
+        }
+
+        const fullyRefunded = charge.amount_refunded >= charge.amount;
+        try {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data: fullyRefunded
+              ? { status: 'REFUNDED' }
+              : { amount: (charge.amount - charge.amount_refunded) / 100 },
+          });
+          console.log(`[Webhook] ${fullyRefunded ? 'Fully' : 'Partially'} refunded payment ${payment.id} (${paymentIntentId})`);
+        } catch (error) {
+          console.error('[Webhook] Failed to reconcile refund:', error);
+        }
+        break;
+      }
+
       default:
         break;
     }
