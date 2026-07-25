@@ -751,3 +751,84 @@ categories. Findings:
   printing the password. Not built: the full guided-tour UI (step
   indicators, in-app reset) — a written walkthrough is the honest
   substitute for now.
+
+## 2026-07-25 (cont'd) — "implement all the missing features," in full
+
+Told to build everything from the prior sweep's confirmed-missing list.
+Did all of it, each piece additive, tested against the local dev db, and
+verified against the full suite before moving to the next:
+
+- **Inventory persistence + opportunity scoring** (`INV-001/002/003`).
+  `InventoryItem`/`InventorySnapshot` (migration `20260725183653`) give the
+  vehicles/listings/products batch routes cross-request memory they never
+  had — they were fully stateless before this (parse a feed, render,
+  forget). `lib/inventory.ts`'s `scoreItem` is a pure, directly-tested
+  function (8 cases) that ranks "what to promote next" from days-in-
+  inventory, whether an item has a recent video, and whether its price
+  changed since the last one — grounded only in facts we observed
+  ourselves (our own timestamps, raw-text equality), never a parsed/
+  interpreted price number, because a wrong "price dropped 20%" claim
+  about a real business's real listing would be worse than no claim.
+  Wired into `lib/feed-batch.ts` (the shared render loop vehicles/products
+  already used) opt-in via a `vertical` param, best-effort so a tracking
+  hiccup can never break the actual paid render (4 exit paths covered,
+  4 tests). `listings/batch` was rewritten off its duplicated ~100-line
+  inline loop onto that same shared path — same external behavior,
+  verified — which is also how it picked up bilingual rendering, which it
+  never had (products/batch gained the same). Removal detection only
+  fires after a genuine full-feed refresh (`feedUrl` mode) — an inline
+  array or a single scraped listing page is never assumed to be "the whole
+  lot." `/dashboard/recommendations` + `/api/inventory/recommendations`
+  is the customer-facing surface — pull, not push (no in-app cron, matching
+  how the rest of this growth system already works).
+- **Public campaign attribution** (`ATTR-001/002/003/004`). One artifact —
+  `/l/[creativeId]` — instead of three separate ones: the AdCreative's own
+  cuid IS the public link/QR-code target (already unguessable, no slug/
+  token system needed), the page itself is the landing page, and its form
+  is the lead capture. A submission is a `CreativeEvent`
+  (`kind='lead_submitted'`), deliberately NOT a `Lead` row — `Lead` is
+  ForgeVid's own outbound sales pipeline, and a stranger interested in a
+  *customer's* listing is that customer's lead, conflating the two would
+  have polluted arms-length revenue tracking with visitor data that was
+  never ForgeVid's. Rate-limited by a new small in-process limiter
+  (`lib/simple-rate-limit.ts`) rather than the existing
+  `lib/rate-limiter.ts`, which creates a Redis client and never calls
+  `.connect()` anywhere visible — wiring an unverified distributed limiter
+  into a new public endpoint seemed riskier than an honest, tested,
+  in-process one sized for the traffic this feature actually has (none
+  yet). `/api/l/` is CSRF-exempt like `/api/webhooks/` (a QR-scan visitor
+  has no ForgeVid session to protect); `/l/` was added to the same
+  i18n-bypass list `/v/` and `/samples/` already needed. 6 tests cover
+  validation, 404 handling, and rate-limit boundaries including that one
+  IP's throttling doesn't affect another. `/api/ad-studio/creatives/[id]/
+  leads` lets the owner see what their landing page captured.
+- **Operating-cost ledger** (`EVID-002`). `/admin/operating-costs` — same
+  admin-CRUD shape as `/admin/leads`, but tenant-scoped correctly from the
+  very start this time. `getHackathonEvidence()` now separates hand-entered
+  operating cost and marketing spend from automatic AI cost, closer to a
+  real P&L. 5 tests.
+- **One more real bug, found by accident while extending
+  `getHackathonEvidence()`'s query shape**: none this time — the earlier
+  `/api/admin/leads` fix from this session was the only live one; this
+  round's ownership checks were built in from the start and the tests
+  confirm it (5 cases on operating-costs, mirroring the leads fix).
+
+**Still true, still the actual blocker on judged revenue:** Stripe LIVE
+mode. Every piece of attribution/inventory/cost infrastructure now exists
+to record and prove revenue and spend the moment it's collectible — that
+doesn't make it collectible yet.
+
+**Still deliberately not built** (unchanged from the prior entry, still
+correctly out of scope): event sourcing/idempotent webhook pipeline,
+cryptographic evidence hashing, dead-letter queues, circuit breakers,
+coupon codes beyond the existing referral model, full localization
+certification, the in-app guided judge tour UI, real-time
+in-app daily-recommendation push (email/notification) — the surface exists,
+nobody's relying on it yet to justify the push mechanism.
+
+**Noticed but not touched:** a concurrent session independently produced
+its own `evidence/XPRIZE-ELIGIBILITY-*` eligibility-disclosure files in
+this same working tree while this work was in progress — overlapping with
+this session's earlier `evidence/PROVENANCE.md`. Left both alone
+(uncommitted, not staged); worth reconciling into one document before
+submission rather than shipping two competing eligibility narratives.
