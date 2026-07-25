@@ -169,6 +169,7 @@ export default async function AdminOverviewPage() {
                 { href: '/admin/evidence', label: 'Hackathon evidence — users, activation, costs & revenue' },
                 { href: '/admin/leads', label: 'Outbound leads — dealer/realtor/e-commerce pipeline' },
                 { href: '/admin/ai-decisions', label: 'Gemini decisions — prompts, results, cost per generation' },
+                { href: '/admin/operating-costs', label: 'Operating costs — hosting, contractor, tooling, marketing spend' },
               ].map((t) => (
                 <Link
                   key={t.href}

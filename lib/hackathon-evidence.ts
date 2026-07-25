@@ -62,11 +62,25 @@ export async function getHackathonEvidence() {
     .filter((lead) => lead.isRelatedParty)
     .reduce((sum, lead) => sum + (lead.revenueCents ?? 0), 0) / 100
 
+  // Hand-entered operating costs (hosting, contractors, tooling, paid
+  // marketing) — separate from AIGeneration.cost (API cost only), so the
+  // dashboard can show something closer to a real P&L instead of just
+  // inference spend.
+  const operatingCosts = await prisma.operatingCost.findMany({
+    where: { incurredOn: { gte: HACKATHON_START } },
+    orderBy: { incurredOn: 'asc' },
+  })
+  const operatingCostUsd = operatingCosts.reduce((sum, c) => sum + c.amountCents, 0) / 100
+  const marketingSpendUsd = operatingCosts
+    .filter((c) => c.category === 'marketing_spend')
+    .reduce((sum, c) => sum + c.amountCents, 0) / 100
+
   return {
     generatedAt: new Date(),
     start: HACKATHON_START,
     rows,
     leads,
+    operatingCosts,
     summary: {
       users: rows.length,
       activatedUsers: rows.filter((row) => row.activated).length,
@@ -84,6 +98,8 @@ export async function getHackathonEvidence() {
       outboundConverted: armsLengthLeads.filter((l) => l.convertedAt).length,
       outboundRevenueUsd,
       outboundRelatedPartyRevenueUsd,
+      operatingCostUsd,
+      marketingSpendUsd,
     },
   }
 }

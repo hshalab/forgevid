@@ -36,6 +36,7 @@ export default async function HackathonEvidencePage() {
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline"><Link href="/admin/leads">Manage leads</Link></Button>
+          <Button asChild variant="outline"><Link href="/admin/operating-costs">Manage costs</Link></Button>
           <Button asChild><Link href="/api/admin/hackathon-evidence/csv">Export CSV</Link></Button>
         </div>
       </div>
@@ -52,6 +53,15 @@ export default async function HackathonEvidencePage() {
           ))}
         </div>
       </div>
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Costs (hand-entered — see Manage costs)</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card><CardHeader className="pb-2"><CardDescription>Total operating cost</CardDescription></CardHeader><CardContent className="text-2xl font-bold">${s.operatingCostUsd.toFixed(2)}</CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardDescription>Of which marketing spend</CardDescription></CardHeader><CardContent className="text-2xl font-bold">${s.marketingSpendUsd.toFixed(2)}</CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardDescription>Recorded AI cost (auto)</CardDescription></CardHeader><CardContent className="text-2xl font-bold">${s.aiCostUsd.toFixed(2)}</CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardDescription>Total cost (operating + AI)</CardDescription></CardHeader><CardContent className="text-2xl font-bold">${(s.operatingCostUsd + s.aiCostUsd).toFixed(2)}</CardContent></Card>
+        </div>
+      </div>
       {relatedPartyTotal > 0 && (
         <Card className="border-amber-500/40">
           <CardHeader className="pb-2"><CardDescription>Related-party revenue (excluded above — not arms-length)</CardDescription></CardHeader>
@@ -61,9 +71,8 @@ export default async function HackathonEvidencePage() {
       <Card>
         <CardHeader><CardTitle>Evidence definitions</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>Activated: created at least one video. Repeat: created more than one video. Self-serve revenue: succeeded Payment rows with `isRelatedParty = false`. Outbound revenue: `Lead.revenueCents` where `isRelatedParty = false` and a conversion date is set — a separate funnel because some pilots are paid outside Stripe (cash, Zelle, invoice). Costs: recorded AI-generation costs only.</p>
+          <p>Activated: created at least one video. Repeat: created more than one video. Self-serve revenue: succeeded Payment rows with `isRelatedParty = false`. Outbound revenue: `Lead.revenueCents` where `isRelatedParty = false` and a conversion date is set — a separate funnel because some pilots are paid outside Stripe (cash, Zelle, invoice). AI cost: recorded AIGeneration cost only, automatic. Operating cost: hand-entered via Manage costs (hosting, contractor, tooling, marketing spend) — never inferred or auto-charged.</p>
           <p>Related-party (friends/family/team) revenue is flagged per-row at entry time, not inferred after the fact, and is always reported separately from the two totals above.</p>
-          <p>Marketing spend and other expenses must be reconciled separately if they are not recorded in ForgeVid.</p>
           <p>Public testimonials include only feedback whose submitter explicitly checked public-use consent.</p>
         </CardContent>
       </Card>
