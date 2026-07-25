@@ -954,3 +954,42 @@ real-time recommendation push). The financial-integrity gaps found this
 round were higher-value than any of those and weren't visible until Stripe
 actually went live — auditing the webhook path was the right next move,
 not mechanically working down the deferred list.
+
+## 2026-07-25 (cont'd) — one more, deeper billing bug, then closed the loop
+
+Told "proceed the work." Kept pulling the same thread rather than starting
+something new: checked whether `create-checkout-session`'s metadata
+actually matches what the webhook reads (it does, both flows), which led
+to actually reading the subscription-creation code path line by line.
+
+**Found the real bug underneath yesterday's `invoice.payment_succeeded`
+fix:** that fix (and the pre-existing `customer.subscription.updated/
+deleted` handler) both find their `Subscription` row via `metadata: {
+contains: <stripe subscription id> }` — but nothing anywhere ever WROTE
+that id into `metadata` at the point `checkout.session.completed` first
+creates or updates the row. Every downstream lookup was matching zero
+rows from the start. This is worse than it first looks: it's not just a
+revenue-recording gap, it's an **access-control gap** — `getUserPlan()`
+correctly fails closed to `free` once a `Subscription.status` isn't
+`ACTIVE`/`TRIALING`, but `customer.subscription.deleted` could never have
+found the row to flip that status on in the first place, meaning a
+canceled subscriber may have silently kept paid-plan access forever.
+Fixed: `checkout.session.completed` now captures `session.subscription`/
+`session.customer` into the same `{stripeSubscriptionId,
+stripeCustomerId}` metadata shape the cancellation handler already writes,
+on both the create and update paths.
+
+2 new tests (new subscription, plan-change/re-checkout onto an existing
+row). Verified the regression is real and caught: stripped the field back
+out, watched the exact assertion fail with the actual-vs-expected diff,
+restored, confirmed green. Full suite 207/207, full `npm run build`
+succeeds.
+
+This closes the loop on the full billing lifecycle audited this stretch:
+checkout creation -> webhook processing -> revenue recording -> refund
+reconciliation -> cancellation -> access enforcement. Every link in that
+chain is now traced and either confirmed correct or fixed. Stopping this
+thread here rather than continuing to look for more — the highest-value,
+least-speculative next work is a real end-to-end purchase (still nobody's
+run one) and the still-open non-engineering items (`NEXT_PUBLIC_
+COMPANY_ADDRESS`, reconciling the two eligibility documents).
