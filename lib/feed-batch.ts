@@ -20,6 +20,7 @@ import { checkGenerationQuota, settleGenerationEntitlement } from './quota';
 import { moderateText, recordModerationBlock } from './moderation';
 import { importSiteImages } from './site-images';
 import { DEFAULT_TRANSITION } from './transitions';
+import { recordInventorySnapshot, type Vertical } from './inventory';
 import type { AspectRatio, NarrationLanguage } from './video-generator';
 import type { LowerThird } from './lower-third';
 
@@ -30,6 +31,8 @@ export interface FeedItem {
   label: string;
   /** Photo URLs, in order. */
   photos: string[];
+  /** Raw price text as the feed gave it, for inventory tracking — never parsed to a number. */
+  priceText?: string | null;
   /** Facts-only prompt built from `photoCount` real images. */
   buildPrompt: (photoCount: number) => string;
   /**
@@ -55,6 +58,12 @@ export interface FeedBatchOptions {
   captionPreset?: import('./captions').CaptionPresetName;
   addOns?: string[];
   maxPhotosPerItem?: number;
+  /**
+   * Vertical for cross-request inventory tracking (price changes, days in
+   * inventory, "no recent video"). Omit to skip tracking entirely — existing
+   * callers keep working unchanged.
+   */
+  vertical?: Vertical;
 }
 
 export interface FeedBatchResult {
@@ -75,6 +84,26 @@ export async function runFeedBatch(
   for (const item of items) {
     const result: FeedBatchResult = { ref: item.ref, label: item.label };
 
+    // Cross-request inventory tracking (price changes, days in inventory, "no
+    // recent video") is best-effort: a tracking hiccup must never break the
+    // actual render this caller is paying for.
+    const snapshotIfTracked = async (photoCount: number, videoId?: string) => {
+      if (!opts.vertical) return;
+      try {
+        await recordInventorySnapshot({
+          userId: opts.userId,
+          vertical: opts.vertical,
+          externalRef: item.ref,
+          label: item.label,
+          priceText: item.priceText,
+          photoCount,
+          videoId,
+        });
+      } catch (err) {
+        console.error(`[feed-batch] inventory snapshot failed for ${item.ref}:`, err);
+      }
+    };
+
     // Quota per item: a 25-item batch must not let a user render 25 videos on a
     // plan that allows five. Purchased credits (1 each) pick up the remaining
     // items once the monthly allowance runs out mid-batch.
@@ -82,6 +111,7 @@ export async function runFeedBatch(
     if (!quota.allowed) {
       result.error = quota.reason ?? 'Quota exceeded';
       results.push(result);
+      await snapshotIfTracked(0);
       continue;
     }
 
@@ -91,6 +121,7 @@ export async function runFeedBatch(
     if (images.length === 0) {
       result.error = 'None of the photos could be fetched';
       results.push(result);
+      await snapshotIfTracked(0);
       continue;
     }
 
@@ -118,6 +149,7 @@ export async function runFeedBatch(
       void recordModerationBlock('prompt', promptModeration.categories);
       result.error = promptModeration.reason ?? 'Blocked by our content policy';
       results.push(result);
+      await snapshotIfTracked(images.length);
       continue;
     }
 
@@ -158,6 +190,7 @@ export async function runFeedBatch(
     }
 
     results.push(result);
+    await snapshotIfTracked(images.length, result.videoId);
   }
 
   const started = results.filter((r) => r.videoId).length;

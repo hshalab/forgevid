@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { resolveVoiceIdForUser } from '@/lib/cloned-voices';
 import { FetchLimitError, SsrfError, safeFetch, withDefaultScheme } from '@/lib/safe-fetch';
 import { runFeedBatch, type FeedItem } from '@/lib/feed-batch';
+import { markRemovedItems } from '@/lib/inventory';
 import {
   ProductParseError,
   parseProductFeed,
@@ -45,6 +46,9 @@ const bodySchema = z
     voiceId: z.string().optional(),
     renderQuality: z.enum(['draft', 'full', '4k']).default('full'),
     captionPreset: z.enum(['default', 'large', 'subtle', 'karaoke']).optional(),
+    // A store wants both: pass ['en','es'] to render every product twice, once
+    // per language. Each language consumes its own quota, as intended.
+    languages: z.array(z.enum(['en', 'es'])).min(1).max(2).default(['en']),
     // Parse + count only; don't render or touch quota.
     preview: z.boolean().optional(),
     approvedByUser: z.boolean().default(false),
@@ -65,6 +69,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 });
   }
   const { feedUrl, duration, aspectRatio, voiceId, renderQuality, captionPreset } = parsed.data;
+  const languages = [...new Set(parsed.data.languages)];
 
   let products: Product[];
   try {
@@ -116,24 +121,49 @@ export async function POST(req: NextRequest) {
     ref: p.ref,
     label: p.title,
     photos: p.photos,
+    priceText: p.price,
     moderationText: [p.title, p.brand, p.description].filter(Boolean).join('. '),
     buildPrompt: (n) => productPrompt(p, n),
     lowerThird: () => productLowerThird(p),
   }));
 
-  const { started, failed, results } = await runFeedBatch(items, {
-    userId,
-    duration,
-    aspectRatio,
-    voiceId: resolvedVoiceId,
-    renderQuality,
-    captionPreset,
-  });
+  // One batch per requested language. A bilingual request renders each
+  // product twice — the English cut for one audience, the Spanish cut for
+  // the other.
+  let started = 0;
+  let failed = 0;
+  const results: Array<{ ref: string; label: string; language: string; videoId?: string; photosUsed?: number; error?: string }> = [];
+  for (const language of languages) {
+    const batch = await runFeedBatch(items, {
+      userId,
+      duration,
+      aspectRatio,
+      voiceId: resolvedVoiceId,
+      language,
+      renderQuality,
+      captionPreset,
+      vertical: 'ecom',
+    });
+    started += batch.started;
+    failed += batch.failed;
+    for (const r of batch.results) results.push({ ...r, language });
+  }
 
+  // A feedUrl pull represents the WHOLE catalog, so anything no longer in it
+  // is delisted — exclude it from future recommendations. An inline
+  // `products` array is never assumed complete, so this only runs for feeds.
+  if (feedUrl) {
+    await markRemovedItems(userId, 'ecom', products.map((p) => p.ref)).catch((err) =>
+      console.error('[products] removal detection failed:', err),
+    );
+  }
+
+  const langLabel = languages.join('+');
   return NextResponse.json({
     started,
     failed,
+    languages,
     results,
-    message: `Started ${started} of ${results.length} product ads. Poll /api/ai/jobs/{videoId} for each.`,
+    message: `Started ${started} of ${results.length} product ads (${langLabel}). Poll /api/ai/jobs/{videoId} for each.`,
   });
 }

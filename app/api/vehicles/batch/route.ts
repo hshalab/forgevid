@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { resolveVoiceIdForUser } from '@/lib/cloned-voices';
 import { FetchLimitError, SsrfError, safeFetch, withDefaultScheme } from '@/lib/safe-fetch';
 import { runFeedBatch, type FeedItem } from '@/lib/feed-batch';
+import { markRemovedItems } from '@/lib/inventory';
 import {
   VehicleParseError,
   parseVehicleFeed,
@@ -123,6 +124,7 @@ export async function POST(req: NextRequest) {
     ref: v.ref,
     label: v.title,
     photos: v.photos,
+    priceText: v.price,
     moderationText: [v.title, v.trim, v.highlights].filter(Boolean).join('. '),
     buildPrompt: (n) => vehiclePrompt(v, n),
     lowerThird: () => vehicleLowerThird(v),
@@ -142,10 +144,20 @@ export async function POST(req: NextRequest) {
       language,
       renderQuality,
       captionPreset,
+      vertical: 'auto',
     });
     started += batch.started;
     failed += batch.failed;
     for (const r of batch.results) results.push({ ...r, language });
+  }
+
+  // A feedUrl pull represents the WHOLE lot, so anything no longer in it is
+  // sold/delisted — exclude it from future recommendations. An inline
+  // `vehicles` array is never assumed complete, so this only runs for feeds.
+  if (feedUrl) {
+    await markRemovedItems(userId, 'auto', vehicles.map((v) => v.ref)).catch((err) =>
+      console.error('[vehicles] removal detection failed:', err),
+    );
   }
 
   const langLabel = languages.join('+');

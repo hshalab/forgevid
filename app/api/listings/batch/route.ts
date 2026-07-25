@@ -2,15 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { enqueueGeneration } from '@/lib/video-queue';
-import { runGeneration } from '@/lib/generation-pipeline';
-import { withRenderSlot } from '@/lib/render-semaphore';
-import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
-import { moderateText, recordModerationBlock } from '@/lib/moderation';
-import { importSiteImages } from '@/lib/site-images';
-import { DEFAULT_TRANSITION } from '@/lib/transitions';
 import { resolveVoiceIdForUser } from '@/lib/cloned-voices';
+import { runFeedBatch, type FeedItem } from '@/lib/feed-batch';
+import { markRemovedItems } from '@/lib/inventory';
 import {
   ListingParseError,
   listingPrompt,
@@ -60,6 +54,9 @@ const bodySchema = z
     voiceId: z.string().optional(),
     renderQuality: z.enum(['draft', 'full', '4k']).default('full'),
     captionPreset: z.enum(['default', 'large', 'subtle', 'karaoke']).optional(),
+    // An agent wants both: pass ['en','es'] to render every listing twice, once
+    // per language. Each language consumes its own quota, as intended.
+    languages: z.array(z.enum(['en', 'es'])).min(1).max(2).default(['en']),
     // Parse + count only; don't render or touch quota.
     preview: z.boolean().optional(),
     approvedByUser: z.boolean().default(false),
@@ -68,14 +65,6 @@ const bodySchema = z
     (b) => [b.csv, b.listings, b.feedUrl].filter(Boolean).length === 1,
     { message: 'Provide exactly one of `csv`, `listings` or `feedUrl`' },
   );
-
-interface BatchResult {
-  ref: string;
-  address: string;
-  videoId?: string;
-  photosUsed?: number;
-  error?: string;
-}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -92,8 +81,13 @@ export async function POST(req: NextRequest) {
     );
   }
   const { csv, feedUrl, duration, aspectRatio, voiceId, renderQuality, captionPreset } = parsed.data;
+  const languages = [...new Set(parsed.data.languages)];
 
   let listings: Listing[];
+  // Only a true MLS/RESO feed pull represents the agent's WHOLE portfolio —
+  // a single scraped listing page or a hand-typed array is never assumed
+  // complete, so removal detection only runs for this path.
+  let isFullFeedRefresh = false;
   try {
     if (feedUrl) {
       // A feed url is attacker-supplied data. It goes through the same guard as
@@ -118,6 +112,7 @@ export async function POST(req: NextRequest) {
         }];
       } else {
         listings = parseListingsFeed(body.toString('utf8'), contentType);
+        isFullFeedRefresh = true;
       }
     } else if (csv) {
       listings = parseListingsCsv(csv);
@@ -164,111 +159,63 @@ export async function POST(req: NextRequest) {
 
   // Resolve the voice once — it is the same narrator for the whole batch.
   const resolvedVoiceId = await resolveVoiceIdForUser(userId, voiceId);
-  const results: BatchResult[] = [];
+  const items: FeedItem[] = listings.map((listing) => ({
+    ref: listing.ref,
+    label: listing.address,
+    photos: listing.photos,
+    priceText: listing.price,
+    moderationText: [listing.address, listing.highlights].filter(Boolean).join('. '),
+    buildPrompt: (n) => listingPrompt(listing, n),
+    // The price is the reason anyone watches a listing video. Burn it in.
+    lowerThird: () => ({
+      title: listing.address,
+      facts: [
+        listing.price,
+        listing.beds ? `${listing.beds} bed` : undefined,
+        listing.baths ? `${listing.baths} bath` : undefined,
+      ].filter((f): f is string => Boolean(f)),
+      start: 0.6,
+      duration: 4.5,
+    }),
+  }));
 
-  for (const listing of listings) {
-    const result: BatchResult = { ref: listing.ref, address: listing.address };
-
-    // Quota is per generation, checked per listing: a batch of twenty must not
-    // let a user render twenty videos on a plan that allows five. Purchased
-    // credits (1 each) pick up the remaining listings once the monthly
-    // allowance runs out mid-batch.
-    const quota = await checkGenerationQuota(userId, duration, 1);
-    if (!quota.allowed) {
-      result.error = quota.reason ?? 'Quota exceeded';
-      results.push(result);
-      continue;
-    }
-
-    // Photos are agent-supplied URLs, so they go through the SSRF guard and
-    // land as MediaAssets this user owns. Order is preserved.
-    const images = await importSiteImages(userId, listing.photos, MAX_PHOTOS_PER_LISTING);
-    if (images.length === 0) {
-      result.error = 'None of the photos could be fetched';
-      results.push(result);
-      continue;
-    }
-
-    // Content policy: moderate the raw listing text before rendering it.
-    const moderation = await moderateText([listing.address, listing.highlights].filter(Boolean).join('. '));
-    if (!moderation.allowed) {
-      void recordModerationBlock('prompt', moderation.categories);
-      result.error = moderation.reason ?? 'Blocked by our content policy';
-      results.push(result);
-      continue;
-    }
-
-    const input = {
-      prompt: listingPrompt(listing, images.length),
-      style: 'professional',
+  // One batch per requested language. A bilingual request renders each
+  // listing twice — the English cut for one audience, the Spanish cut for
+  // the other.
+  let started = 0;
+  let failed = 0;
+  const results: Array<{ ref: string; label: string; language: string; videoId?: string; photosUsed?: number; error?: string }> = [];
+  for (const language of languages) {
+    const batch = await runFeedBatch(items, {
+      userId,
       duration,
-      addOns: ['voiceover', 'subtitles'],
       aspectRatio,
       voiceId: resolvedVoiceId,
-      transition: DEFAULT_TRANSITION,
-      mediaAssetIds: images.map((i) => i.assetId),
-      // The listing shows THIS house. Never pad it with stock footage.
-      mediaOnly: true,
+      language,
       renderQuality,
       captionPreset,
-      // The price is the reason anyone watches a listing video. Burn it in.
-      lowerThird: {
-        title: listing.address,
-        facts: [
-          listing.price,
-          listing.beds ? `${listing.beds} bed` : undefined,
-          listing.baths ? `${listing.baths} bath` : undefined,
-        ].filter((f): f is string => Boolean(f)),
-        start: 0.6,
-        duration: 4.5,
-      },
-    };
-
-    try {
-      const video = await prisma.video.create({
-        data: {
-          title: listing.address.slice(0, 80),
-          description: `Listing ${listing.ref}`,
-          status: 'QUEUED',
-          duration,
-          format: 'mp4',
-          userId,
-          metadata: JSON.stringify({
-            generation: { stage: 'queued', percent: 5, updatedAt: new Date().toISOString() },
-            // Paid-credit videos get the watermark removed (lib/generation-pipeline.ts
-            // brandingForVideo) — set server-side ONLY, from the quota verdict.
-            ...(quota.usePurchasedCredit ? { paidCredit: true } : {}),
-            request: input,
-            listing: { ref: listing.ref, address: listing.address },
-          }),
-        },
-        select: { id: true },
-      });
-
-      await settleGenerationEntitlement(userId, video.id, duration, quota);
-
-      const jobId = await enqueueGeneration({ videoId: video.id, userId, input });
-      if (!jobId) {
-        void withRenderSlot(() => runGeneration(video.id, input)).catch((err) =>
-          console.error(`[listings] ${listing.ref} failed:`, err instanceof Error ? err.message : err),
-        );
-      }
-
-      result.videoId = video.id;
-      result.photosUsed = images.length;
-    } catch (error) {
-      console.error(`[listings] ${listing.ref} could not start:`, error);
-      result.error = 'Could not start the generation';
-    }
-
-    results.push(result);
+      // Matches this route's pre-existing behavior: no background music bed.
+      addOns: ['voiceover', 'subtitles'],
+      maxPhotosPerItem: MAX_PHOTOS_PER_LISTING,
+      vertical: 'realestate',
+    });
+    started += batch.started;
+    failed += batch.failed;
+    for (const r of batch.results) results.push({ ...r, language });
   }
 
-  const started = results.filter((r) => r.videoId).length;
+  if (isFullFeedRefresh) {
+    await markRemovedItems(userId, 'realestate', listings.map((l) => l.ref)).catch((err) =>
+      console.error('[listings] removal detection failed:', err),
+    );
+  }
+
+  const langLabel = languages.join('+');
   return NextResponse.json({
     started,
-    failed: results.length - started,
+    failed,
+    languages,
     results,
-    message: `Started ${started} of ${results.length} listing videos. Poll /api/ai/jobs/{videoId} for each.`,
+    message: `Started ${started} of ${results.length} listing videos (${langLabel}). Poll /api/ai/jobs/{videoId} for each.`,
   });
 }

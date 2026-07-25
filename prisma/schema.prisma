@@ -902,6 +902,83 @@ enum LeadStatus {
   DEAD
 }
 
+/// One inventory item (vehicle/listing/product) tracked ACROSS feed pulls, so
+/// price changes, days-in-inventory and "no recent video" can be detected —
+/// none of which is possible from a single stateless batch request. Keyed on
+/// the feed's own reference so re-importing the same feed updates the same
+/// row instead of creating a duplicate.
+model InventoryItem {
+  id          String    @id @default(cuid())
+  userId      String
+  vertical    String // "auto" | "realestate" | "ecom"
+  externalRef String // the feed's own id: VIN/stock#, listing ref, SKU
+  label       String
+  priceText   String? // raw, never parsed to a number — see lib/inventory.ts
+  photoCount  Int       @default(0)
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  removedAt   DateTime? // set when a feedUrl refresh no longer lists this ref
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  snapshots   InventorySnapshot[]
+
+  @@unique([userId, vertical, externalRef])
+  @@index([userId, vertical])
+  @@map("inventory_items")
+}
+
+/// One point-in-time observation of an InventoryItem, one per batch run it
+/// appeared in. Diffing consecutive snapshots is how a price change is
+/// detected — as a text-inequality fact, never a parsed/interpreted number
+/// (a wrong "price dropped 20%" claim about a real business's real listing
+/// would be worse than not claiming anything).
+model InventorySnapshot {
+  id        String        @id @default(cuid())
+  itemId    String
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  priceText String?
+  label     String
+  videoId   String? // the Video this particular pull produced, if any
+  createdAt DateTime      @default(now())
+
+  @@index([itemId])
+  @@map("inventory_snapshots")
+}
+
+/// A view or lead-submission on a public /l/[creativeId] landing page. The
+/// AdCreative's own cuid id doubles as the public link segment — already
+/// unguessable, no separate slug/token needed.
+model CreativeEvent {
+  id         String   @id @default(cuid())
+  creativeId String
+  kind       String // "view" | "lead_submitted"
+  createdAt  DateTime @default(now())
+
+  @@index([creativeId])
+  @@map("creative_events")
+}
+
+/// Non-AI operating costs — hosting, contractor, tool subscriptions, paid
+/// marketing spend — kept separate from AIGeneration.cost (API cost only) so
+/// the evidence dashboard can report a real P&L, not just inference cost.
+/// Entered by hand; nothing here is inferred or auto-charged.
+model OperatingCost {
+  id          String   @id @default(cuid())
+  userId      String
+  category    String // "hosting" | "contractor" | "tooling" | "marketing_spend" | "other"
+  description String
+  amountCents Int
+  currency    String   @default("usd")
+  incurredOn  DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([incurredOn])
+  @@map("operating_costs")
+}
+
 enum VideoStatus {
   DRAFT // created (e.g. from a template) but never rendered
   QUEUED // generation job enqueued, not yet picked up
