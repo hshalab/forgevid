@@ -1009,3 +1009,25 @@ and `/privacy` now show the real address and the old placeholder string
 is completely gone. Only the two eligibility documents (this session's
 `evidence/PROVENANCE.md` vs. the concurrent session's
 `evidence/XPRIZE-ELIGIBILITY-*`) remain to reconcile before submission.
+
+## 2026-07-25 (cont'd) — Growth Operator P0: decision + approval gate
+
+Re-audited the Growth Operator backlog against the repository and wrote the
+status matrix to `evidence/GROWTH-OPERATOR-IMPLEMENTATION-AUDIT.md`.
+
+- **Structured Gemini decision:** `/api/growth-operator/decision` takes an
+  owned active inventory opportunity, sends only observed evidence to Gemini,
+  validates a strict EN/ES campaign-decision schema, rejects answers that
+  switch inventory items, and persists the audit as
+  `AIGeneration.type = GROWTH_DECISION`. Recommendations now shows the reason,
+  audience, languages, aspect, angle, template, voice, CTA, evidence, next test
+  and confidence.
+- **Post-generation approval inbox:** `AdCreative` now records rights status,
+  approval status, revision, approved revision, approver and review evidence.
+  `/dashboard/approvals` supports approve/reject/request changes/resubmit.
+  Approval requires explicit rights confirmation and a completed owned video.
+  Resubmission increments the revision and invalidates approval. `/l/[id]`
+  fails closed unless the exact current revision is approved.
+
+Added regression coverage for tenant isolation, rights confirmation, render
+completion, revision invalidation, structured Gemini output and item binding.

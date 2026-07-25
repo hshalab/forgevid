@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, TrendingUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Loader2, Sparkles, TrendingUp } from "lucide-react"
 
 interface Opportunity {
   itemId: string
@@ -15,6 +16,20 @@ interface Opportunity {
   daysInInventory: number
   score: number
   reasons: string[]
+}
+
+interface GrowthDecision {
+  reason: string
+  targetAudience: string
+  languages: string[]
+  aspectRatio: string
+  salesAngle: string
+  templateStrategy: string
+  voiceStyle: string
+  callToAction: string
+  evidenceUsed: string[]
+  testNext: string
+  confidence: string
 }
 
 const VERTICALS = [
@@ -29,6 +44,27 @@ export default function RecommendationsPage() {
   const [vertical, setVertical] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [decisions, setDecisions] = useState<Record<string, GrowthDecision>>({})
+  const [deciding, setDeciding] = useState<string | null>(null)
+
+  const askGrowthOperator = async (itemId: string) => {
+    setDeciding(itemId)
+    setError(null)
+    try {
+      const res = await fetch("/api/growth-operator/decision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Gemini could not create a campaign decision.")
+      setDecisions((current) => ({ ...current, [itemId]: data.decision }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gemini could not create a campaign decision.")
+    } finally {
+      setDeciding(null)
+    }
+  }
 
   useEffect(() => {
     setIsLoading(true)
@@ -112,6 +148,40 @@ export default function RecommendationsPage() {
                     <li key={reason}>{reason}</li>
                   ))}
                 </ul>
+                <div className="mt-4 border-t pt-4">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void askGrowthOperator(item.itemId)}
+                    disabled={deciding === item.itemId}
+                  >
+                    {deciding === item.itemId
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Sparkles className="h-4 w-4" />}
+                    Ask Gemini for campaign decision
+                  </Button>
+                </div>
+                {decisions[item.itemId] && (
+                  <div className="mt-4 space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge>{decisions[item.itemId].confidence} confidence</Badge>
+                      <Badge variant="outline">{decisions[item.itemId].aspectRatio}</Badge>
+                      {decisions[item.itemId].languages.map((language) => (
+                        <Badge key={language} variant="secondary">{language.toUpperCase()}</Badge>
+                      ))}
+                    </div>
+                    <p><strong>Why:</strong> {decisions[item.itemId].reason}</p>
+                    <p><strong>Audience:</strong> {decisions[item.itemId].targetAudience}</p>
+                    <p><strong>Sales angle:</strong> {decisions[item.itemId].salesAngle}</p>
+                    <p><strong>Template:</strong> {decisions[item.itemId].templateStrategy}</p>
+                    <p><strong>Voice:</strong> {decisions[item.itemId].voiceStyle}</p>
+                    <p><strong>CTA:</strong> {decisions[item.itemId].callToAction}</p>
+                    <p><strong>Next test:</strong> {decisions[item.itemId].testNext}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Evidence: {decisions[item.itemId].evidenceUsed.join(" · ")}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

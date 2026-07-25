@@ -839,22 +839,34 @@ model AdCampaign {
 /// marketing axes under test plus performance (isWinner / roas) for the winners
 /// library + "make more like this" loop.
 model AdCreative {
-  id         String   @id @default(cuid())
-  userId     String
-  campaignId String
-  videoId    String?
-  label      String
-  hook       String?
-  cta        String?
-  aspect     String?
-  platform   String
-  isWinner   Boolean  @default(false)
-  roas       Float?
-  notes      String?
-  createdAt  DateTime @default(now())
+  id                   String   @id @default(cuid())
+  userId               String
+  campaignId           String
+  videoId              String?
+  label                String
+  hook                 String?
+  cta                  String?
+  aspect               String?
+  platform             String
+  isWinner             Boolean  @default(false)
+  roas                 Float?
+  notes                String?
+  recommendationReason String?
+  expectedResult       String?
+  estimatedCostCents   Int?
+  rightsStatus         String   @default("UNCONFIRMED") // "UNCONFIRMED" | "CONFIRMED"
+  approvalStatus       String   @default("AWAITING_REVIEW") // "AWAITING_REVIEW" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"
+  revision             Int      @default(1)
+  approvedRevision     Int?
+  approvedAt           DateTime?
+  approvedByUserId     String?
+  reviewNote           String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([userId])
   @@index([campaignId])
+  @@index([userId, approvalStatus])
   @@map("ad_creatives")
 }
 
@@ -1008,6 +1020,7 @@ enum AIGenerationType {
   SCRIPT_WRITING
   VOICE_SYNTHESIS
   IMAGE_GENERATION
+  GROWTH_DECISION
 }
 
 enum GenerationStatus {

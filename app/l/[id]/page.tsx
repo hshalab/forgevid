@@ -15,10 +15,17 @@ export default async function CreativeLandingPage({ params }: { params: Promise<
 
   const creative = await prisma.adCreative.findUnique({
     where: { id },
-    select: { id: true, label: true, videoId: true },
+    select: {
+      id: true,
+      label: true,
+      videoId: true,
+      approvalStatus: true,
+      revision: true,
+      approvedRevision: true,
+    },
   });
 
-  if (!creative) {
+  if (!creative || creative.approvalStatus !== 'APPROVED' || creative.approvedRevision !== creative.revision) {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 p-6 text-center">
         <h1 className="text-xl font-semibold">This link is no longer active</h1>

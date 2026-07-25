@@ -19,6 +19,7 @@ import {
   CreditCard,
   Rss,
   TrendingUp,
+  ShieldCheck,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -35,6 +36,7 @@ const navigation = [
   { name: "Ad Studio", href: "/dashboard/ad-studio", icon: Megaphone, badge: "New" },
   { name: "Feed → Videos", href: "/dashboard/feed", icon: Rss, badge: "New" },
   { name: "Recommendations", href: "/dashboard/recommendations", icon: TrendingUp, badge: "New" },
+  { name: "Approvals", href: "/dashboard/approvals", icon: ShieldCheck, badge: "New" },
   { name: "Share & Review", href: "/dashboard/collaborate", icon: Users },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Referrals", href: "/dashboard/referrals", icon: Gift },

@@ -11,6 +11,9 @@ interface IncomingCreative {
   hook?: string
   cta?: string
   aspect?: string
+  recommendationReason?: string
+  expectedResult?: string
+  estimatedCostCents?: number
 }
 
 // POST — persist a campaign + its creatives. The variant videos were already
@@ -61,6 +64,13 @@ export async function POST(req: NextRequest) {
       cta: c.cta ? String(c.cta).slice(0, 60) : null,
       aspect: c.aspect ? String(c.aspect).slice(0, 10) : null,
       platform,
+      recommendationReason: c.recommendationReason
+        ? String(c.recommendationReason).slice(0, 1000)
+        : 'Generated from the campaign brief and selected creative experiment.',
+      expectedResult: c.expectedResult ? String(c.expectedResult).slice(0, 500) : null,
+      estimatedCostCents: Number.isInteger(c.estimatedCostCents) && Number(c.estimatedCostCents) >= 0
+        ? Number(c.estimatedCostCents)
+        : null,
     })),
   })
 
@@ -112,6 +122,10 @@ export async function GET() {
             status: v?.status ?? null,
             url: v?.fileUrl ?? v?.url ?? null,
             thumbnail: v?.thumbnail ?? null,
+            approvalStatus: c.approvalStatus,
+            rightsStatus: c.rightsStatus,
+            revision: c.revision,
+            approvedRevision: c.approvedRevision,
           }
         }),
     })),
