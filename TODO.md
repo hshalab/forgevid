@@ -886,3 +886,71 @@ without them initiating it.
   `/privacy` currently show the literal placeholder text "Update this
   business address in NEXT_PUBLIC_COMPANY_ADDRESS" to real visitors —
   needs the founder's real address, not something to invent.
+
+## 2026-07-25 (cont'd) — the 4 missing live prices, then a financial-integrity audit
+
+Told "now is ok, proceed with the todos list implementation." Checked
+first whether "ok" meant a real purchase had gone through (it hadn't — 0
+charges in live mode) rather than assume; noted it and moved on since
+that wasn't what was being asked. Two threads:
+
+**Created the 4 previously-missing live prices** (explicitly authorized
+this time, after the classifier correctly blocked the unauthorized
+attempt last round): Pilot $99, Single $19, Topup10 $15, Topup25 $29 —
+all one-time, matching `lib/stripe.ts`'s existing definitions exactly.
+Wired into Railway, re-verified all 7 prices (3 subscriptions + 4 credit
+packs) resolve correctly against the live key.
+
+**Then audited the webhook handler for financial integrity, since "proceed
+with the todos" pointed back at the big backlog and SEC-003 ("verify
+webhook signatures, deduplicate payment events, separate refunds from
+revenue") was still open.** Signature verification itself was already
+correct. Found two real, consequential gaps, both fixed and tested:
+
+- **Subscription revenue was never recorded.** `prisma.payment.create` existed
+  in exactly one place in the whole codebase — the one-time credit-pack
+  branch. `checkout.session.completed`'s subscription branch only ever
+  touched the `Subscription` row; `invoice.payment_succeeded` (fires on the
+  first charge AND every renewal) was a no-op stub. Net effect: a real
+  customer subscribing through the now-live Starter/Pro/Enterprise checkout
+  would show as **$0 revenue forever** in `getHackathonEvidence()` — the
+  exact number judges care about, for the core product, not just the
+  outbound-pilot funnel. Fixed by recording revenue from
+  `invoice.payment_succeeded` exclusively (avoids double-counting the first
+  month), resolving `userId` via the same Subscription-metadata lookup the
+  existing `customer.subscription.updated` handler already uses, idempotent
+  via `Payment.stripePaymentId`'s existing unique constraint + a caught
+  P2002 (same pattern as `lib/credits.ts`'s `grantCredits`). 6 tests.
+- **Refunds were never reconciled.** `charge.refunded` wasn't handled at all
+  — `PaymentStatus.REFUNDED` existed in the schema, unused. A chargeback or
+  manual refund would leave the Payment row at `SUCCEEDED` forever, so
+  refunded money would keep counting as earned revenue. Fixed: full refund
+  → status `REFUNDED` (falls out of the existing `status='SUCCEEDED'`
+  filter, no other change needed); partial refund → amount reduced to what
+  was actually kept, status unchanged. 4 tests.
+
+**Also fixed, found while touching the same evidence-export code:** the
+admin CSV export (`Lead`/`OperatingCost` free-text fields) had no
+CSV/formula-injection guard — a business name starting with `=`, `+`, `-`,
+or `@` would be interpreted as a formula by Excel/Sheets. Moved the `csv()`
+helper into `lib/csv-format.ts` (needed anyway: exporting it directly from
+the route file to unit-test it broke `next build`'s route-export
+validation, which `tsc --noEmit` doesn't check — caught by actually running
+the build, not by type-checking alone). 6 tests.
+
+Verified the whole stretch actually catches regressions, not just green by
+default: injected a wrong-userId bug into the payment-recording code,
+watched the exact test fail, reverted, confirmed green, before trusting any
+of it. Full suite 205/205 across 33 files; full `npm run build` succeeds
+after every change in this stretch, not just `tsc --noEmit` — the
+`ai-decisions` searchParams break earlier this session was the lesson that
+made that the standing discipline now.
+
+**Deliberately not touched, still correctly deferred:** everything already
+logged as out of scope above (event sourcing, crypto-hashed evidence,
+dead-letter queues, circuit breakers, coupon codes beyond the referral
+model, full localization certification, in-app guided judge tour,
+real-time recommendation push). The financial-integrity gaps found this
+round were higher-value than any of those and weren't visible until Stripe
+actually went live — auditing the webhook path was the right next move,
+not mechanically working down the deferred list.
