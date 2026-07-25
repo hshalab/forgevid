@@ -27,6 +27,10 @@ const NEXTAUTH_CSRF_EXEMPT_PREFIXES = [
 
 function isCsrfExemptApiPath(pathname: string): boolean {
   return pathname.startsWith('/api/webhooks/') ||
+    // Public lead capture from a campaign landing page (app/l/[id]) — the
+    // visitor is a stranger with no ForgeVid session/cookie to protect;
+    // there's no ambient authority for a forged cross-site POST to abuse.
+    pathname.startsWith('/api/l/') ||
     NEXTAUTH_CSRF_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
@@ -105,6 +109,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/v/') ||
     // Public template/sample links are implemented as unprefixed routes.
     pathname.startsWith('/samples/') ||
+    // Public campaign landing pages (QR/link targets) — same reason as /v/.
+    pathname.startsWith('/l/') ||
     // /pricing exists only unprefixed; skip the /en/pricing redirect hop.
     pathname.startsWith('/pricing') ||
     pathname === '/' ||

@@ -953,6 +953,14 @@ model CreativeEvent {
   id         String   @id @default(cuid())
   creativeId String
   kind       String // "view" | "lead_submitted"
+  // Only present when kind = "lead_submitted" — a visitor interested in the
+  // AdCreative owner's product/listing, NOT a Lead row (which is ForgeVid's
+  // own outbound sales pipeline; conflating the two would pollute arms-length
+  // revenue tracking with a ForgeVid customer's downstream visitor data).
+  name       String?
+  email      String?
+  phone      String?
+  message    String?
   createdAt  DateTime @default(now())
 
   @@index([creativeId])
