@@ -170,7 +170,48 @@ export async function POST(request: NextRequest) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
-        console.log(`Payment succeeded for invoice ${invoice.id}`);
+        const stripeSubscriptionId = (invoice as any).subscription as string | null;
+
+        // The canonical place subscription revenue is recorded — fires for
+        // the first charge AND every renewal, so it's the single source of
+        // truth for Payment rows (checkout.session.completed only activates
+        // access; recording revenue here avoids double-counting the first
+        // month). Idempotent via stripePaymentId's unique constraint, same
+        // pattern as lib/credits.ts's grantCredits.
+        if (!stripeSubscriptionId) {
+          console.log(`[Webhook] invoice ${invoice.id} has no subscription — not a subscription payment, skipping Payment record`);
+          break;
+        }
+
+        const subscription = await prisma.subscription.findFirst({
+          where: { metadata: { contains: stripeSubscriptionId } },
+        });
+        if (!subscription) {
+          console.error(`[Webhook] invoice.payment_succeeded: no Subscription found for Stripe subscription ${stripeSubscriptionId} — cannot record Payment`);
+          break;
+        }
+
+        try {
+          await prisma.payment.create({
+            data: {
+              userId: subscription.userId,
+              amount: invoice.amount_paid / 100,
+              currency: invoice.currency || 'usd',
+              status: 'SUCCEEDED',
+              stripePaymentId: ((invoice as any).payment_intent as string) || invoice.id,
+              description: `Subscription payment: ${subscription.plan}`,
+              subscriptionId: subscription.id,
+              metadata: JSON.stringify({ type: 'subscription_payment', invoiceId: invoice.id, stripeSubscriptionId }),
+            },
+          });
+          console.log(`[Webhook] Recorded subscription payment for user ${subscription.userId}, invoice ${invoice.id}`);
+        } catch (error: any) {
+          if (error?.code === 'P2002') {
+            console.log(`[Webhook] Payment for invoice ${invoice.id} already recorded, skipping`);
+          } else {
+            console.error('[Webhook] Failed to record subscription payment:', error);
+          }
+        }
         break;
       }
 
