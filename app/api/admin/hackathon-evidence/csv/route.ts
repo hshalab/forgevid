@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getFreshSessionUser, isAdminRole } from '@/lib/rbac'
 import { getHackathonEvidence } from '@/lib/hackathon-evidence'
-
-function csv(value: unknown) {
-  const text = value instanceof Date ? value.toISOString() : String(value ?? '')
-  return `"${text.replace(/"/g, '""')}"`
-}
+import { csv } from '@/lib/csv-format'
 
 export async function GET() {
   const user = await getFreshSessionUser()
