@@ -30,6 +30,11 @@ export async function POST(request: NextRequest) {
   })
   const results = []
   for (const schedule of schedules) {
+    const claim = await prisma.growthOperatorSchedule.updateMany({
+      where: { id: schedule.id, enabled: true, nextRunAt: { lte: now } },
+      data: { nextRunAt: new Date(now.getTime() + 15 * 60_000) },
+    })
+    if (claim.count !== 1) continue
     try {
       const opportunities = await getRecommendations(schedule.userId, undefined, schedule.maxDecisions)
       const decisions = []

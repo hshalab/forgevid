@@ -514,5 +514,27 @@ app.prepare().then(() => {
   httpServer.listen(PORT, () => {
     console.log(`> Ready on http://localhost:${PORT}`);
     console.log(`> Environment: ${process.env.NODE_ENV || 'development'}`);
+
+    // Opt-in Growth Operator scheduler. The API atomically claims due rows, so
+    // multiple Railway replicas cannot process the same schedule. This only
+    // prepares recommendations and operator notifications.
+    const schedulerSecret = process.env.CRON_SECRET;
+    if (!dev && schedulerSecret) {
+      const runSchedules = async () => {
+        try {
+          const response = await fetch(`http://127.0.0.1:${PORT}/api/internal/growth-operator`, {
+            method: 'POST',
+            headers: { 'x-cron-secret': schedulerSecret },
+          });
+          if (!response.ok) console.error(`[Growth scheduler] HTTP ${response.status}`);
+        } catch (error) {
+          console.error('[Growth scheduler] trigger failed:', error);
+        }
+      };
+      const initialTimer = setTimeout(runSchedules, 60_000);
+      const intervalTimer = setInterval(runSchedules, 15 * 60_000);
+      initialTimer.unref();
+      intervalTimer.unref();
+    }
   });
 });
