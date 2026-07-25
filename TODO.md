@@ -702,3 +702,52 @@ plus QR codes/public landing pages (`ATTR-002`/`ATTR-003`) — no public
 traffic exists yet to attribute (outreach is 100% DM, not links), so
 building click-tracking for a channel nobody's using yet would be
 speculative. Revisit once a landing page is actually needed.
+
+## 2026-07-25 (cont'd) — systematic gap sweep, one real security fix, judge mode
+
+Asked "did you fully implement the TODO list?" — no. Rather than keep
+grepping one category at a time (almost duplicated the ad-studio
+hooks/winners/ROAS feature — it was already fully built, dashboard and
+all), ran one broad Explore pass across the 10 highest-uncertainty
+categories. Findings:
+
+- **Already fully built** (confirmed by reading the actual files, not just
+  route names): experiment management / winners / ROAS
+  (`app/dashboard/ad-studio/`, `app/api/ad-studio/**`), testimonial
+  consent (`app/api/testimonials/route.ts` + `dashboard/testimonial`).
+- **Confirmed missing, deliberately still not built:** inventory
+  persistence/history (`vehicles`/`listings`/`products` batch routes are
+  stateless — parse-and-render in one request, nothing snapshotted for
+  later diffing), opportunity scoring, a daily recommendation job, public
+  attribution links/QR codes, public lead-capture forms, an
+  operating/marketing-spend ledger beyond AI cost. All genuine gaps, all
+  still out of scope for the reason already logged above (either needs
+  inventory persistence that doesn't exist yet, or needs public traffic
+  that doesn't exist yet) — see the sweep's full findings in this
+  session's transcript if picking one up later.
+- **One real security bug, found and fixed:** `/api/admin/leads` (my own
+  code, from earlier today) had no tenant scoping — GET returned every
+  admin's leads to any admin, and PATCH/DELETE took a client-supplied `id`
+  with no ownership check, so any admin could edit or delete another
+  admin's outbound pipeline (names, emails, phones, revenue) by id. Fixed
+  in the same pattern already used by `app/api/ad-studio/creatives/[id]`.
+  `tests/api/admin-leads.test.ts` covers it — verified the tests actually
+  catch the regression (stashed the fix, watched 4/8 go red, restored).
+- **Vehicle/listing/product parity gap, left for whoever owns those
+  files:** only the vehicles batch route supports bilingual (`en`/`es`)
+  rendering; listings and products don't have a `languages` field at all.
+  Real gap, not touched — those three routes had a same-day commit from
+  the parallel session, too much collision risk to edit them here.
+- **Judge mode (JUDGE-001/003 lite):** `scripts/seed-judge-demo.ts` —
+  idempotent, upserts a real USER-role (not admin) account with an active
+  Pro subscription so nothing paywalls a judge's walkthrough.
+  `evidence/JUDGE-TESTING-INSTRUCTIONS.md` gives a real 3-minute path
+  through the actual product. **First draft hardcoded the judge password
+  in both files** — caught before committing that this repo is PUBLIC, so
+  a committed credential would be live on the open internet forever, not
+  just visible to judges. Fixed: the script now requires
+  `JUDGE_DEMO_PASSWORD` as an env var and refuses to run without one; the
+  doc points to Devpost's private testing-instructions field instead of
+  printing the password. Not built: the full guided-tour UI (step
+  indicators, in-app reset) — a written walkthrough is the honest
+  substitute for now.
