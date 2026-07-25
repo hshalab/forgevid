@@ -20,7 +20,7 @@
  * Relative imports only — reachable from the worker process.
  */
 
-import type { AspectRatio, PlannedScene } from './video-generator';
+import type { AspectRatio, NarrationLanguage, PlannedScene } from './video-generator';
 
 /** One value of an axis: a human label plus the copy it swaps in. */
 export interface HookOption {
@@ -44,6 +44,8 @@ export interface VariationAxes {
   ctas?: CtaOption[];
   /** Placements: 16:9 (YouTube), 9:16 (Reels/TikTok), 1:1 (feed). */
   aspectRatios?: AspectRatio[];
+  /** Narration/caption languages. Each language is planned independently. */
+  languages?: NarrationLanguage[];
 }
 
 /** A single renderable variant: the body, one set of overrides, and a label. */
@@ -51,11 +53,12 @@ export interface VariantSpec {
   /** e.g. "hook:urgency · 9:16 · cta:signup" — how you read the A/B result. */
   label: string;
   aspectRatio: AspectRatio;
+  language: NarrationLanguage;
   hookNarration?: string;
   hookSearchQuery?: string;
   ctaNarration?: string;
   /** Which value of each axis this variant carries, for reporting. */
-  axes: { hook?: string; cta?: string; aspect: AspectRatio };
+  axes: { hook?: string; cta?: string; aspect: AspectRatio; language: NarrationLanguage };
 }
 
 /** No sane campaign renders more than this in one request. */
@@ -79,8 +82,9 @@ export function expandVariations(axes: VariationAxes): VariantSpec[] {
   const hooks: (HookOption | null)[] = axes.hooks?.length ? axes.hooks : [null];
   const ctas: (CtaOption | null)[] = axes.ctas?.length ? axes.ctas : [null];
   const ratios: AspectRatio[] = axes.aspectRatios?.length ? axes.aspectRatios : ['16:9'];
+  const languages: NarrationLanguage[] = axes.languages?.length ? axes.languages : ['en'];
 
-  const total = hooks.length * ctas.length * ratios.length;
+  const total = hooks.length * ctas.length * ratios.length * languages.length;
   if (total === 0) throw new VariationError('No variants to generate');
   if (total > MAX_VARIANTS) {
     throw new VariationError(
@@ -90,22 +94,25 @@ export function expandVariations(axes: VariationAxes): VariantSpec[] {
   }
 
   const variants: VariantSpec[] = [];
-  for (const ratio of ratios) {
-    for (const hook of hooks) {
-      for (const cta of ctas) {
-        const parts: string[] = [];
-        if (hook) parts.push(`hook:${hook.label}`);
-        parts.push(ratio);
-        if (cta) parts.push(`cta:${cta.label}`);
+  for (const language of languages) {
+    for (const ratio of ratios) {
+      for (const hook of hooks) {
+        for (const cta of ctas) {
+          const parts: string[] = [];
+          if (hook) parts.push(`hook:${hook.label}`);
+          parts.push(language.toUpperCase(), ratio);
+          if (cta) parts.push(`cta:${cta.label}`);
 
-        variants.push({
-          label: parts.join(' · '),
-          aspectRatio: ratio,
-          hookNarration: hook?.narration,
-          hookSearchQuery: hook?.searchQuery,
-          ctaNarration: cta?.narration,
-          axes: { hook: hook?.label, cta: cta?.label, aspect: ratio },
-        });
+          variants.push({
+            label: parts.join(' · '),
+            aspectRatio: ratio,
+            language,
+            hookNarration: hook?.narration,
+            hookSearchQuery: hook?.searchQuery,
+            ctaNarration: cta?.narration,
+            axes: { hook: hook?.label, cta: cta?.label, aspect: ratio, language },
+          });
+        }
       }
     }
   }

@@ -30,6 +30,13 @@ interface GrowthDecision {
   evidenceUsed: string[]
   testNext: string
   confidence: string
+  variants: Array<{
+    language: "en" | "es"
+    hookLabel: string
+    hookNarration: string
+    ctaLabel: string
+    ctaNarration: string
+  }>
 }
 
 const VERTICALS = [
@@ -45,7 +52,10 @@ export default function RecommendationsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [decisions, setDecisions] = useState<Record<string, GrowthDecision>>({})
+  const [auditIds, setAuditIds] = useState<Record<string, string>>({})
   const [deciding, setDeciding] = useState<string | null>(null)
+  const [generating, setGenerating] = useState<string | null>(null)
+  const [createdCampaigns, setCreatedCampaigns] = useState<Record<string, string>>({})
 
   const askGrowthOperator = async (itemId: string) => {
     setDeciding(itemId)
@@ -59,10 +69,76 @@ export default function RecommendationsPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Gemini could not create a campaign decision.")
       setDecisions((current) => ({ ...current, [itemId]: data.decision }))
+      setAuditIds((current) => ({ ...current, [itemId]: data.auditId }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gemini could not create a campaign decision.")
     } finally {
       setDeciding(null)
+    }
+  }
+
+  const generateCampaign = async (item: Opportunity) => {
+    const decision = decisions[item.itemId]
+    const auditId = auditIds[item.itemId]
+    if (!decision || !auditId) return
+    setGenerating(item.itemId)
+    setError(null)
+    try {
+      const allVariants: any[] = []
+      for (const language of decision.languages) {
+        const languageVariants = decision.variants.filter((variant) => variant.language === language)
+        const firstCta = languageVariants[0]
+        const response = await fetch("/api/campaigns/variations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: `${item.label}. ${decision.salesAngle}. Evidence: ${decision.evidenceUsed.join("; ")}.`,
+            duration: 25,
+            renderQuality: "full",
+            addOns: ["voiceover", "subtitles", "music"],
+            axes: {
+              hooks: languageVariants.map((variant) => ({
+                label: variant.hookLabel,
+                narration: variant.hookNarration,
+              })),
+              ctas: firstCta ? [{ label: firstCta.ctaLabel, narration: firstCta.ctaNarration }] : [],
+              aspectRatios: [decision.aspectRatio],
+              languages: [language],
+            },
+          }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || `Could not generate ${language.toUpperCase()} variants.`)
+        allVariants.push(...(Array.isArray(data.variants) ? data.variants : []))
+      }
+      const started = allVariants.filter((variant) => variant.videoId)
+      if (started.length === 0) throw new Error("No campaign variants could start rendering.")
+      const persist = await fetch("/api/ad-studio/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${item.label} Growth Operator campaign`,
+          brief: decision.reason,
+          platform: decision.aspectRatio === "16:9" ? "youtube" : "reels",
+          aiDecisionId: auditId,
+          creatives: started.map((variant) => ({
+            videoId: variant.videoId,
+            label: variant.label,
+            hook: variant.axes?.hook,
+            cta: variant.axes?.cta,
+            aspect: variant.aspectRatio,
+            recommendationReason: decision.reason,
+            expectedResult: decision.testNext,
+          })),
+        }),
+      })
+      const saved = await persist.json().catch(() => ({}))
+      if (!persist.ok) throw new Error(saved.error || "Could not save the campaign.")
+      setCreatedCampaigns((current) => ({ ...current, [item.itemId]: saved.campaignId }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate the campaign.")
+    } finally {
+      setGenerating(null)
     }
   }
 
@@ -180,6 +256,22 @@ export default function RecommendationsPage() {
                     <p className="text-xs text-muted-foreground">
                       Evidence: {decisions[item.itemId].evidenceUsed.join(" · ")}
                     </p>
+                    {createdCampaigns[item.itemId] ? (
+                      <Button asChild size="sm">
+                        <a href="/dashboard/approvals">Review generated variants</a>
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => void generateCampaign(item)}
+                        disabled={generating === item.itemId}
+                      >
+                        {generating === item.itemId
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Sparkles className="h-4 w-4" />}
+                        Generate campaign
+                      </Button>
+                    )}
                   </div>
                 )}
               </CardContent>

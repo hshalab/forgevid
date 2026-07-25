@@ -56,6 +56,7 @@ const bodySchema = z.object({
     hooks: z.array(hookSchema).max(6).optional(),
     ctas: z.array(ctaSchema).max(4).optional(),
     aspectRatios: z.array(z.enum(['16:9', '9:16', '1:1'])).max(3).optional(),
+    languages: z.array(z.enum(['en', 'es'])).min(1).max(2).optional(),
   }),
 });
 
@@ -63,6 +64,7 @@ interface VariantResult {
   label: string;
   aspectRatio: string;
   axes: Record<string, unknown>;
+  language: string;
   videoId?: string;
   error?: string;
 }
@@ -100,22 +102,22 @@ export async function POST(req: NextRequest) {
     throw error;
   }
 
-  // Plan the shared body exactly once. Every variant renders from this, so the
-  // only difference between two variants is the axis being tested.
-  let body;
+  // Plan once PER language. Variants in the same language share an identical
+  // body, while EN/ES narration is generated natively rather than translated
+  // after rendering.
+  const bodies = new Map<string, Awaited<ReturnType<typeof planScenes>>>();
   try {
-    body = await planScenes(input.prompt, input.duration);
-  } catch (error) {
-    console.error('[campaigns] planning failed:', error);
-    return NextResponse.json({ error: 'Could not plan the concept' }, { status: 502 });
-  }
-  try {
-    assertBodySupportsAxes(body, axes);
+    for (const language of [...new Set(variants.map((variant) => variant.language))]) {
+      const body = await planScenes(input.prompt, input.duration, language);
+      assertBodySupportsAxes(body, axes);
+      bodies.set(language, body);
+    }
   } catch (error) {
     if (error instanceof VariationError) {
       return NextResponse.json({ error: error.message }, { status: 422 });
     }
-    throw error;
+    console.error('[campaigns] planning failed:', error);
+    return NextResponse.json({ error: 'Could not plan the concept' }, { status: 502 });
   }
 
   const resolvedVoiceId = await resolveVoiceIdForUser(userId, input.voiceId);
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
       label: variant.label,
       aspectRatio: variant.aspectRatio,
       axes: variant.axes,
+      language: variant.language,
     };
 
     // Quota per variant: a 12-variant matrix must not let a user render twelve
@@ -149,8 +152,9 @@ export async function POST(req: NextRequest) {
       voiceId: resolvedVoiceId,
       transition,
       renderQuality: input.renderQuality,
+      language: variant.language,
       // The shared body + this variant's single overridden axis.
-      presetScenes: body,
+      presetScenes: bodies.get(variant.language),
       hookNarration: variant.hookNarration,
       hookSearchQuery: variant.hookSearchQuery,
       ctaNarration: variant.ctaNarration,
@@ -197,7 +201,7 @@ export async function POST(req: NextRequest) {
   const started = results.filter((r) => r.videoId).length;
   return NextResponse.json({
     concept: input.prompt.slice(0, 80),
-    bodyScenes: body.length,
+    bodyScenes: Object.fromEntries([...bodies].map(([language, body]) => [language, body.length])),
     started,
     failed: results.length - started,
     limit: MAX_VARIANTS,

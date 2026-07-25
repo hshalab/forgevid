@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : ''
   const brief = typeof body.brief === 'string' ? body.brief.trim().slice(0, 4000) : ''
   const platform = typeof body.platform === 'string' ? body.platform.slice(0, 20) : 'tiktok'
+  const aiDecisionId = typeof body.aiDecisionId === 'string' ? body.aiDecisionId : null
   const creatives: IncomingCreative[] = Array.isArray(body.creatives) ? body.creatives : []
 
   if (!name || !brief || creatives.length === 0) {
@@ -52,7 +53,17 @@ export async function POST(req: NextRequest) {
     : []
   const ownedIds = new Set(owned.map((v) => v.id))
 
-  const campaign = await prisma.adCampaign.create({ data: { userId, name, brief, platform } })
+  if (aiDecisionId) {
+    const ownedDecision = await prisma.aIGeneration.findFirst({
+      where: { id: aiDecisionId, userId, type: 'GROWTH_DECISION', status: 'COMPLETED' },
+      select: { id: true },
+    })
+    if (!ownedDecision) {
+      return NextResponse.json({ error: 'AI decision not found or not owned by this user' }, { status: 400 })
+    }
+  }
+
+  const campaign = await prisma.adCampaign.create({ data: { userId, name, brief, platform, aiDecisionId } })
 
   await prisma.adCreative.createMany({
     data: creatives.map((c) => ({

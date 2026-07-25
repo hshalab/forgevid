@@ -824,14 +824,16 @@ model VideoComment {
 /// Ad Studio: a marketing campaign — one concept generated into a matrix of ad
 /// creatives (hook x CTA x placement) for a target platform.
 model AdCampaign {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  brief     String
-  platform  String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  aiDecisionId String?
+  name         String
+  brief        String
+  platform     String
+  createdAt    DateTime @default(now())
 
   @@index([userId])
+  @@index([aiDecisionId])
   @@map("ad_campaigns")
 }
 
