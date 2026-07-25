@@ -125,7 +125,11 @@ export default function FeedToVideosPage() {
   function loadSample() { setMode("feed"); setFeedKind("paste"); setPasteText(JSON.stringify(SAMPLES[vertical], null, 2)); setPreview(null) }
 
   function singleItem() {
-    const photos = [...uploadedUrls, ...photoUrls.split(/\r?\n|,/).map((url) => url.trim()).filter(Boolean)]
+    const remotePhotos = photoUrls.split(/\r?\n|,/).map((url) => url.trim()).filter(Boolean)
+    if (sourceUrl.trim() && remotePhotos.some((url) => url === sourceUrl.trim())) {
+      throw new Error("The original listing/detail page is not a photo URL. Remove it from Authorized photo URLs and upload the actual photos.")
+    }
+    const photos = [...uploadedUrls, ...remotePhotos]
     if (!itemTitle.trim()) throw new Error(vertical === "realestate" ? "Enter the property address." : "Enter a title.")
     if (photos.length === 0) throw new Error("Upload at least one authorized photo or add an authorized photo URL.")
     const note = [highlights.trim(), contact.trim() && `Contact: ${contact.trim()}`, sourceUrl.trim() && `Source reference: ${sourceUrl.trim()}`].filter(Boolean).join("\n")
@@ -164,8 +168,22 @@ export default function FeedToVideosPage() {
   }
 
   async function runPreview() {
-    resetOutputs(); setPreviewing(true)
+    resetOutputs(); setApprovedByUser(false); setPreviewing(true)
     try {
+      if ((mode === "single" || mode === "screenshots") && photoUrls.trim()) {
+        const urls = photoUrls.split(/\r?\n|,/).map((url) => url.trim()).filter(Boolean)
+        const response = await fetch("/api/media/validate-urls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls, sourceUrl: sourceUrl.trim() || undefined }),
+        })
+        const validation = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(validation.error || "Could not validate the photo URLs.")
+        if (!validation.valid) {
+          const first = validation.invalid?.[0]
+          throw new Error(`${first?.reason || "One or more photo URLs are not usable"} Use Upload authorized photos for the most reliable result.`)
+        }
+      }
       const data = await post(collectBody({ preview: true }))
       setPreview({ count: data.count ?? 0, items: data.items ?? [] })
     } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong.") } finally { setPreviewing(false) }
@@ -462,8 +480,13 @@ export default function FeedToVideosPage() {
       {result && (
         <Card className="bg-white/5 border-white/10">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-400" /> Started {result.started} of {result.results?.length ?? 0} videos</CardTitle>
-            <CardDescription className="text-gray-400">{result.message} — updating live as they render.</CardDescription>
+            <CardTitle className="text-white flex items-center gap-2">
+              {result.started > 0 ? <CheckCircle2 className="h-5 w-5 text-green-400" /> : <AlertCircle className="h-5 w-5 text-red-400" />}
+              {result.started > 0 ? `Started ${result.started} of ${result.results?.length ?? 0} videos` : "No videos were started"}
+            </CardTitle>
+            <CardDescription className="text-gray-400">
+              {result.started > 0 ? `${result.message} — updating live as they render.` : "Fix the item errors below, preview again, and retry. No video was created."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -502,7 +525,11 @@ export default function FeedToVideosPage() {
                 )
               })}
             </div>
-            <Link href="/dashboard/videos"><Button variant="outline" className="border-white/15 text-gray-200 mt-2">Watch them in My Videos <ArrowRight className="h-4 w-4 ml-2" /></Button></Link>
+            {result.started > 0 ? (
+              <Link href="/dashboard/videos"><Button variant="outline" className="border-white/15 text-gray-200 mt-2">Watch them in My Videos <ArrowRight className="h-4 w-4 ml-2" /></Button></Link>
+            ) : (
+              <Button variant="outline" onClick={() => { setResult(null); setPreview(null); setApprovedByUser(false) }} className="border-white/15 text-gray-200 mt-2">Fix media and preview again</Button>
+            )}
           </CardContent>
         </Card>
       )}
