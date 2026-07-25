@@ -8,7 +8,7 @@
 **Last updated: [DATE]**
 
 This Policy is part of the Terms of Service and explains billing, cancellation, and refunds for
-**[ForgeVid, Inc.]**
+**Kryst Investments LLC**
 
 ## 1. Subscriptions & auto-renewal
 - Paid plans are billed **in advance**, per period (monthly unless stated), and **renew automatically**

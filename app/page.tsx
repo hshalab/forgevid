@@ -356,7 +356,7 @@ export default function RootPage() {
       {/* ------------------------------------------------------------- footer */}
       <footer className="border-t border-white/5 px-4 py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm text-gray-500 sm:flex-row">
-          <span>© {new Date().getFullYear()} ForgeVid</span>
+          <span>© {new Date().getFullYear()} ForgeVid. All rights reserved. ForgeVid is owned and operated by Kryst Investments LLC.</span>
           <div className="flex items-center gap-6">
             <a href="/privacy" className="transition-colors hover:text-gray-300">Privacy</a>
             <a href="/terms" className="transition-colors hover:text-gray-300">Terms</a>

@@ -6,7 +6,7 @@
 
 **Last updated: [DATE]**
 
-**[ForgeVid, Inc.]** ("**ForgeVid**," "**we**") provides an AI video-generation service. This Policy
+**Kryst Investments LLC** ("**ForgeVid**," "**we**") provides an AI video-generation service. This Policy
 explains what personal data we collect, how we use and share it, and your rights. For personal data of
 EU/UK individuals, ForgeVid is the "**controller**" for its own account/marketing data and a
 "**processor**"/"**service provider**" for the Customer Content you submit.
@@ -112,5 +112,5 @@ We may update this Policy; we will post the new version with a new date and, for
 notice. 
 
 ## 14. Contact
-**[ForgeVid, Inc.] · [address]**
+**Kryst Investments LLC · [address]**
 Privacy requests: **[privacy@forgevid.com]** · EU/UK representative: **[if applicable]** · DPO: **[if applicable]**

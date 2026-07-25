@@ -8,7 +8,7 @@
 **Last updated: [DATE] · Effective: [DATE]**
 
 These Terms of Service ("**Terms**") are a binding agreement between you ("**you**," "**Customer**")
-and **[ForgeVid, Inc.]**, a **[Delaware corporation]** ("**ForgeVid**," "**we**," "**us**"). They govern
+and **Kryst Investments LLC** ("**ForgeVid**," "**we**," "**us**"). They govern
 your access to and use of the ForgeVid websites, applications, APIs, and services (the "**Service**").
 
 **PLEASE READ SECTION 16 (DISPUTE RESOLUTION) CAREFULLY — IT REQUIRES BINDING ARBITRATION AND A
@@ -173,4 +173,4 @@ rules. Subject to Section 16, the exclusive venue for any permitted court action
 federal courts located in **[County, State]**, and you consent to their jurisdiction.
 
 ## 18. Contact
-**[ForgeVid, Inc.] · [address] · [legal@forgevid.com]**
+**Kryst Investments LLC · [address] · [legal@forgevid.com]**
