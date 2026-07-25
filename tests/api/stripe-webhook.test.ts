@@ -94,6 +94,67 @@ describe('Stripe webhook — signature verification', () => {
   })
 })
 
+describe('Stripe webhook — checkout.session.completed links the Stripe subscription id', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('stores stripeSubscriptionId/stripeCustomerId in metadata when creating a new Subscription', async () => {
+    mockedConstructEvent.mockReturnValue({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          client_reference_id: 'user-1',
+          metadata: { planId: 'pro' },
+          subscription: 'sub_new123',
+          customer: 'cus_new456',
+        },
+      },
+    } as any)
+    mockedSubscription.findFirst.mockResolvedValue(null)
+    mockedSubscription.create.mockResolvedValue({} as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedSubscription.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          metadata: JSON.stringify({ stripeSubscriptionId: 'sub_new123', stripeCustomerId: 'cus_new456' }),
+        }),
+      }),
+    )
+  })
+
+  it('also stores it when updating an existing Subscription row (plan change / re-checkout)', async () => {
+    mockedConstructEvent.mockReturnValue({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          client_reference_id: 'user-1',
+          metadata: { planId: 'enterprise' },
+          subscription: 'sub_upgraded789',
+          customer: 'cus_new456',
+        },
+      },
+    } as any)
+    mockedSubscription.findFirst.mockResolvedValue({ id: 'existing-sub-1' } as any)
+    mockedSubscription.update.mockResolvedValue({} as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedSubscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'existing-sub-1' },
+        data: expect.objectContaining({
+          metadata: JSON.stringify({ stripeSubscriptionId: 'sub_upgraded789', stripeCustomerId: 'cus_new456' }),
+        }),
+      }),
+    )
+  })
+})
+
 describe('Stripe webhook — invoice.payment_succeeded records subscription revenue', () => {
   beforeEach(() => jest.clearAllMocks())
 

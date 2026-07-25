@@ -93,6 +93,16 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // The Stripe subscription id must be captured HERE, at creation —
+        // it's the only thing invoice.payment_succeeded and
+        // customer.subscription.updated/deleted can use later to find this
+        // row again (both look up by `metadata: { contains: <stripe sub id> }`).
+        // Without it, every downstream lookup for this subscription silently
+        // matches zero rows, starting with its very first invoice.
+        const stripeSubscriptionId = (session.subscription as string) || null;
+        const stripeCustomerId = (session.customer as string) || null;
+        const stripeMetadata = JSON.stringify({ stripeSubscriptionId, stripeCustomerId });
+
         const existing = await prisma.subscription.findFirst({
           where: { userId },
           orderBy: { createdAt: 'desc' },
@@ -106,6 +116,7 @@ export async function POST(request: NextRequest) {
               status: 'ACTIVE',
               currentPeriodStart: new Date(),
               currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              metadata: stripeMetadata,
             },
           });
         } else {
@@ -116,6 +127,7 @@ export async function POST(request: NextRequest) {
               status: 'ACTIVE',
               currentPeriodStart: new Date(),
               currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              metadata: stripeMetadata,
             },
           });
         }
