@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getCreativeEvidence } from '@/lib/growth-evidence'
 
 export const runtime = 'nodejs'
 
@@ -24,13 +25,14 @@ export async function GET(req: NextRequest) {
 
   const videoIds = creatives.map((c) => c.videoId).filter((v): v is string => !!v)
   const campaignIds = Array.from(new Set(creatives.map((c) => c.campaignId)))
-  const [videos, campaigns] = await Promise.all([
+  const [videos, campaigns, evidence] = await Promise.all([
     videoIds.length
       ? prisma.video.findMany({ where: { id: { in: videoIds } }, select: { id: true, status: true, url: true, fileUrl: true, thumbnail: true } })
       : Promise.resolve([]),
     campaignIds.length
       ? prisma.adCampaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true, brief: true, platform: true } })
       : Promise.resolve([]),
+    getCreativeEvidence(userId, creatives.map((creative) => creative.id)),
   ])
   const vById = new Map(videos.map((v) => [v.id, v]))
   const cById = new Map(campaigns.map((c) => [c.id, c]))
@@ -56,6 +58,7 @@ export async function GET(req: NextRequest) {
         campaignId: c.campaignId,
         campaignName: camp?.name ?? null,
         brief: camp?.brief ?? null,
+        evidence: evidence.get(c.id),
       }
     }),
   })

@@ -170,6 +170,12 @@ export function CreativeCard({
         <p className="text-sm font-medium line-clamp-2" title={creative.label}>
           {creative.label}
         </p>
+        {creative.evidence && (
+          <div className="rounded-md border p-2 text-xs text-muted-foreground">
+            <Badge variant="outline" className="mr-2 capitalize">{creative.evidence.strength}</Badge>
+            {creative.evidence.views} views · {creative.evidence.leads} leads · {creative.evidence.downstreamConversions} outcomes
+          </div>
+        )}
         {(creative.hook || creative.cta) && (
           <div className="flex flex-wrap gap-1.5">
             {creative.hook && (

@@ -30,7 +30,7 @@ export async function GET() {
       return { label: start.toLocaleString('en-US', { month: 'short' }), start, end };
     });
 
-    const [total, thisMonth, completed, inProgress, failed, durationAgg, plan, ...monthlyCounts] =
+    const [total, thisMonth, completed, inProgress, failed, durationAgg, plan, creatives, assumptions, conversions, marketingSpend, ...monthlyCounts] =
       await Promise.all([
         prisma.video.count({ where: { userId } }),
         prisma.video.count({ where: { userId, createdAt: { gte: startOfMonth } } }),
@@ -39,6 +39,20 @@ export async function GET() {
         prisma.video.count({ where: { userId, status: 'FAILED' } }),
         prisma.video.aggregate({ where: { userId }, _sum: { duration: true }, _avg: { duration: true } }),
         getUserPlan(userId),
+        prisma.adCreative.findMany({
+          where: { userId },
+          select: { id: true, label: true, campaignId: true },
+        }),
+        prisma.impactAssumption.findUnique({ where: { userId } }),
+        prisma.growthConversion.findMany({
+          where: { userId },
+          orderBy: { occurredAt: 'desc' },
+          take: 100,
+        }),
+        prisma.operatingCost.aggregate({
+          where: { userId, category: 'marketing_spend' },
+          _sum: { amountCents: true },
+        }),
         ...monthRanges.map((r) =>
           prisma.video.count({ where: { userId, createdAt: { gte: r.start, lt: r.end } } }),
         ),
@@ -46,8 +60,23 @@ export async function GET() {
 
     const videoLimit = PLAN_QUOTAS[plan]?.videosPerMonth ?? PLAN_QUOTAS.free.videosPerMonth;
     const totalSeconds = durationAgg._sum.duration ?? 0;
-    const estimatedMinutesSaved = completed * 120;
-    const estimatedCostSavedUsd = completed * 500;
+    const minutesPerTraditionalVideo = assumptions?.minutesPerTraditionalVideo ?? 120;
+    const agencyCostPerVideoCents = assumptions?.agencyCostPerVideoCents ?? 50_000;
+    const estimatedMinutesSaved = completed * minutesPerTraditionalVideo;
+    const estimatedCostSavedUsd = (completed * agencyCostPerVideoCents) / 100;
+    const creativeIds = creatives.map((creative) => creative.id);
+    const eventGroups = creativeIds.length
+      ? await prisma.creativeEvent.groupBy({
+          by: ['kind'],
+          where: { creativeId: { in: creativeIds } },
+          _count: { _all: true },
+        })
+      : [];
+    const eventCounts = Object.fromEntries(eventGroups.map((group) => [group.kind, group._count._all]));
+    const attributedRevenueCents = conversions.reduce((sum, conversion) => sum + (conversion.revenueCents ?? 0), 0);
+    const leadCount = eventCounts.lead_submitted ?? 0;
+    const viewCount = eventCounts.view ?? 0;
+    const marketingSpendCents = marketingSpend._sum.amountCents ?? 0;
 
     return NextResponse.json({
       summary: {
@@ -67,10 +96,26 @@ export async function GET() {
         estimatedHoursSaved: Math.round((estimatedMinutesSaved / 60) * 10) / 10,
         estimatedCostSavedUsd,
         assumptions: {
-          minutesPerTraditionalVideo: 120,
-          agencyCostPerVideoUsd: 500,
-          label: 'Illustrative estimate based on configurable workflow assumptions',
+          minutesPerTraditionalVideo,
+          agencyCostPerVideoUsd: agencyCostPerVideoCents / 100,
+          label: 'Illustrative estimate using your saved assumptions; not guaranteed results',
         },
+      },
+      impact: {
+        creatives,
+        landingViews: viewCount,
+        capturedLeads: leadCount,
+        conversionRatePct: viewCount > 0 ? Math.round((leadCount / viewCount) * 1000) / 10 : 0,
+        downstreamConversions: conversions.length,
+        qualifiedLeads: conversions.filter((conversion) => conversion.kind === 'qualified_lead').length,
+        appointments: conversions.filter((conversion) => conversion.kind === 'appointment').length,
+        sales: conversions.filter((conversion) => conversion.kind === 'sale').length,
+        retained: conversions.filter((conversion) => conversion.kind === 'retained').length,
+        attributedRevenueCents,
+        currency: conversions[0]?.currency ?? 'usd',
+        marketingSpendCents,
+        costPerLeadCents: leadCount > 0 ? Math.round(marketingSpendCents / leadCount) : null,
+        recentConversions: conversions,
       },
       monthly: monthRanges.map((r, i) => ({ month: r.label, videos: monthlyCounts[i] })),
     });

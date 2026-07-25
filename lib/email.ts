@@ -242,3 +242,16 @@ export async function sendSubscriptionCancelledEmail(to: string, name: string, p
 
   return sendEmail(to, 'Your ForgeVid Subscription Has Been Cancelled', html);
 }
+
+export async function sendGrowthOperatorEmail(to: string, name: string, count: number): Promise<boolean> {
+  const html = baseLayout(
+    'Growth Operator recommendations are ready',
+    `<div class="card">
+      <h1>Your Growth Operator review is ready</h1>
+      <p>Hi ${escapeHtml(name)}, ForgeVid found ${count} evidence-grounded campaign recommendation${count === 1 ? '' : 's'}.</p>
+      <p>No campaign was generated, published, or sent to a prospect. Review and approve every next action yourself.</p>
+      <p style="text-align:center;margin-top:24px"><a href="${APP_URL}/dashboard/recommendations" class="btn">Review recommendations</a></p>
+    </div>`,
+  )
+  return sendEmail(to, `${count} ForgeVid Growth Operator recommendation${count === 1 ? '' : 's'} ready`, html)
+}

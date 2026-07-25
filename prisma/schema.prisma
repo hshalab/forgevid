@@ -981,6 +981,58 @@ model CreativeEvent {
   @@map("creative_events")
 }
 
+/// A customer-recorded downstream outcome attributed to an approved creative.
+/// Revenue is never inferred: the customer supplies the event and amount.
+model GrowthConversion {
+  id            String   @id @default(cuid())
+  userId        String
+  creativeId    String
+  kind          String   // "qualified_lead" | "appointment" | "sale" | "retained"
+  source        String   @default("manual") // "manual" | "csv" | "crm"
+  externalId    String?
+  contactRef    String?  // customer-controlled non-sensitive reference
+  revenueCents  Int?
+  currency      String   @default("usd")
+  notes         String?
+  occurredAt    DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, occurredAt])
+  @@index([creativeId])
+  @@unique([userId, source, externalId])
+  @@map("growth_conversions")
+}
+
+/// Customer-owned assumptions used for illustrative savings estimates.
+model ImpactAssumption {
+  id                         String   @id @default(cuid())
+  userId                     String   @unique
+  minutesPerTraditionalVideo Int      @default(120)
+  agencyCostPerVideoCents    Int      @default(50000)
+  updatedAt                  DateTime @updatedAt
+  createdAt                  DateTime @default(now())
+
+  @@map("impact_assumptions")
+}
+
+model GrowthOperatorSchedule {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  enabled         Boolean  @default(false)
+  cadence         String   @default("daily") // "daily" | "weekly"
+  emailEnabled    Boolean  @default(true)
+  maxDecisions    Int      @default(1)
+  nextRunAt       DateTime?
+  lastRunAt       DateTime?
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@map("growth_operator_schedules")
+}
+
 /// Non-AI operating costs — hosting, contractor, tool subscriptions, paid
 /// marketing spend — kept separate from AIGeneration.cost (API cost only) so
 /// the evidence dashboard can report a real P&L, not just inference cost.

@@ -5,6 +5,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { BarChart3, Play, CheckCircle2, Loader2, ArrowUpRight, Timer, Film } from "lucide-react"
 
 interface Analytics {
@@ -26,6 +28,30 @@ interface Analytics {
     estimatedCostSavedUsd: number
     assumptions: { minutesPerTraditionalVideo: number; agencyCostPerVideoUsd: number; label: string }
   }
+  impact: {
+    creatives: { id: string; label: string; campaignId: string }[]
+    landingViews: number
+    capturedLeads: number
+    conversionRatePct: number
+    downstreamConversions: number
+    qualifiedLeads: number
+    appointments: number
+    sales: number
+    retained: number
+    attributedRevenueCents: number
+    marketingSpendCents: number
+    costPerLeadCents: number | null
+    currency: string
+    recentConversions: Array<{
+      id: string
+      creativeId: string
+      kind: string
+      source: string
+      contactRef: string | null
+      revenueCents: number | null
+      occurredAt: string
+    }>
+  }
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -40,6 +66,9 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [importMessage, setImportMessage] = useState("")
+  const [conversion, setConversion] = useState({ creativeId: "", kind: "qualified_lead", revenue: "", contactRef: "" })
 
   useEffect(() => {
     fetch("/api/user/analytics")
@@ -64,6 +93,57 @@ export default function AnalyticsPage() {
   const usedPct = data.usage.videoLimit > 0 ? Math.min(100, Math.round((data.usage.thisMonth / data.usage.videoLimit) * 100)) : 0
   const maxMonthly = Math.max(1, ...data.monthly.map((m) => m.videos))
   const avgLen = s.avgSeconds > 0 ? `${Math.floor(s.avgSeconds / 60)}:${String(s.avgSeconds % 60).padStart(2, "0")}` : "—"
+
+  const saveAssumptions = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    setSaving(true)
+    const response = await fetch("/api/user/impact-assumptions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        minutesPerTraditionalVideo: Number(form.get("minutes")),
+        agencyCostPerVideoCents: Math.round(Number(form.get("agencyCost")) * 100),
+      }),
+    })
+    if (response.ok) window.location.reload()
+    else setSaving(false)
+  }
+
+  const addConversion = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSaving(true)
+    const response = await fetch("/api/growth-operator/conversions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        creativeId: conversion.creativeId,
+        kind: conversion.kind,
+        contactRef: conversion.contactRef,
+        revenueCents: conversion.revenue ? Math.round(Number(conversion.revenue) * 100) : null,
+        occurredAt: new Date().toISOString(),
+      }),
+    })
+    if (response.ok) window.location.reload()
+    else setSaving(false)
+  }
+
+  const importConversions = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const input = event.currentTarget.elements.namedItem("conversionCsv") as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    setSaving(true)
+    const response = await fetch("/api/growth-operator/conversions/import", {
+      method: "POST",
+      headers: { "Content-Type": "text/csv" },
+      body: await file.text(),
+    })
+    const result = await response.json().catch(() => ({}))
+    setImportMessage(response.ok ? `Imported ${result.imported}; skipped ${result.skipped}.` : result.error || "Import failed.")
+    setSaving(false)
+    if (response.ok) window.location.reload()
+  }
 
   const cards = [
     { label: "Total videos", value: s.total, icon: Film },
@@ -144,6 +224,69 @@ export default function AnalyticsPage() {
           <p className="text-xs text-muted-foreground sm:col-span-3">
             Assumption: {data.value.assumptions.minutesPerTraditionalVideo} minutes and ${data.value.assumptions.agencyCostPerVideoUsd} per conventional video. Adjust this comparison to your workflow.
           </p>
+          <form onSubmit={saveAssumptions} className="sm:col-span-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
+            <div><Label htmlFor="minutes">Minutes per conventional video</Label><Input id="minutes" name="minutes" type="number" min="1" defaultValue={data.value.assumptions.minutesPerTraditionalVideo} /></div>
+            <div><Label htmlFor="agencyCost">Conventional cost per video (USD)</Label><Input id="agencyCost" name="agencyCost" type="number" min="0" step="0.01" defaultValue={data.value.assumptions.agencyCostPerVideoUsd} /></div>
+            <Button type="submit" disabled={saving}>Save assumptions</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Growth impact ledger</CardTitle>
+          <CardDescription>Observed landing activity and customer-recorded outcomes. ForgeVid never infers a sale or revenue.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <Stat label="Landing views" value={data.impact.landingViews} />
+            <Stat label="Captured leads" value={data.impact.capturedLeads} />
+            <Stat label="Lead rate" value={`${data.impact.conversionRatePct}%`} />
+            <Stat label="Downstream outcomes" value={data.impact.downstreamConversions} />
+            <Stat label="Attributed revenue" value={`$${(data.impact.attributedRevenueCents / 100).toFixed(2)}`} />
+            <Stat label="Cost per lead" value={data.impact.costPerLeadCents == null ? "—" : `$${(data.impact.costPerLeadCents / 100).toFixed(2)}`} />
+          </div>
+          {data.impact.creatives.length > 0 && (
+            <>
+            <form onSubmit={addConversion} className="grid gap-3 md:grid-cols-5 items-end border rounded-lg p-4">
+              <div>
+                <Label htmlFor="creative">Approved creative</Label>
+                <select id="creative" required className="h-10 w-full rounded-md border bg-background px-3" value={conversion.creativeId} onChange={(event) => setConversion({ ...conversion, creativeId: event.target.value })}>
+                  <option value="">Choose creative</option>
+                  {data.impact.creatives.map((creative) => <option key={creative.id} value={creative.id}>{creative.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="kind">Outcome</Label>
+                <select id="kind" className="h-10 w-full rounded-md border bg-background px-3" value={conversion.kind} onChange={(event) => setConversion({ ...conversion, kind: event.target.value })}>
+                  <option value="qualified_lead">Qualified lead</option><option value="appointment">Appointment</option><option value="sale">Sale</option><option value="retained">Retained</option>
+                </select>
+              </div>
+              <div><Label htmlFor="contactRef">Contact/order reference</Label><Input id="contactRef" value={conversion.contactRef} onChange={(event) => setConversion({ ...conversion, contactRef: event.target.value })} /></div>
+              <div><Label htmlFor="revenue">Revenue (USD, optional)</Label><Input id="revenue" type="number" min="0" step="0.01" value={conversion.revenue} onChange={(event) => setConversion({ ...conversion, revenue: event.target.value })} /></div>
+              <Button type="submit" disabled={saving}>Record outcome</Button>
+            </form>
+            <form onSubmit={importConversions} className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
+              <div className="min-w-72 flex-1">
+                <Label htmlFor="conversionCsv">Import CRM outcomes (CSV)</Label>
+                <Input id="conversionCsv" name="conversionCsv" type="file" accept=".csv,text/csv" />
+              </div>
+              <Button type="submit" variant="outline" disabled={saving}>Import reviewed CSV</Button>
+              <p className="w-full text-xs text-muted-foreground">
+                Required columns: creativeId, kind, occurredAt, externalId. Optional: revenueUsd, contactRef, notes. Imports never publish or message anyone.
+              </p>
+              {importMessage && <p className="w-full text-sm">{importMessage}</p>}
+            </form>
+            </>
+          )}
+          <div className="space-y-2">
+            {data.impact.recentConversions.length === 0 ? <p className="text-sm text-muted-foreground">No downstream outcomes recorded yet.</p> : data.impact.recentConversions.slice(0, 10).map((item) => (
+              <div key={item.id} className="flex flex-wrap justify-between gap-2 border-b py-2 text-sm">
+                <span className="capitalize">{item.kind.replace("_", " ")} · {item.contactRef || "No reference"} · {item.source}</span>
+                <span>{item.revenueCents == null ? "Revenue not recorded" : `$${(item.revenueCents / 100).toFixed(2)}`} · {new Date(item.occurredAt).toLocaleDateString()}</span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

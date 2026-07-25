@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Loader2, Sparkles, TrendingUp } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Loader2, Sparkles, TrendingUp, CalendarClock } from "lucide-react"
 
 interface Opportunity {
   itemId: string
@@ -56,6 +57,33 @@ export default function RecommendationsPage() {
   const [deciding, setDeciding] = useState<string | null>(null)
   const [generating, setGenerating] = useState<string | null>(null)
   const [createdCampaigns, setCreatedCampaigns] = useState<Record<string, string>>({})
+  const [schedule, setSchedule] = useState({ enabled: false, cadence: "daily", emailEnabled: true, maxDecisions: 1 })
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/growth-operator/schedule", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setSchedule({
+        enabled: Boolean(data.schedule.enabled),
+        cadence: data.schedule.cadence || "daily",
+        emailEnabled: data.schedule.emailEnabled !== false,
+        maxDecisions: data.schedule.maxDecisions || 1,
+      }))
+      .catch(() => {})
+  }, [])
+
+  const saveSchedule = async () => {
+    setScheduleSaving(true)
+    setError(null)
+    const response = await fetch("/api/growth-operator/schedule", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(schedule),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) setError(data.error || "Could not save the Growth Operator schedule.")
+    setScheduleSaving(false)
+  }
 
   const askGrowthOperator = async (itemId: string) => {
     setDeciding(itemId)
@@ -166,6 +194,34 @@ export default function RecommendationsPage() {
           list gets smarter every time you re-import.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg"><CalendarClock className="h-5 w-5" /> Scheduled Growth Operator</CardTitle>
+          <CardDescription>
+            Explicit opt-in. ForgeVid may prepare recommendations and notify you; it never generates campaigns, publishes, or messages prospects automatically.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={schedule.enabled} onCheckedChange={(checked) => setSchedule({ ...schedule, enabled: checked === true })} />
+            Enable scheduled analysis
+          </label>
+          <select className="h-9 rounded-md border bg-background px-3 text-sm" value={schedule.cadence} onChange={(event) => setSchedule({ ...schedule, cadence: event.target.value })}>
+            <option value="daily">Daily</option><option value="weekly">Weekly</option>
+          </select>
+          <select className="h-9 rounded-md border bg-background px-3 text-sm" value={schedule.maxDecisions} onChange={(event) => setSchedule({ ...schedule, maxDecisions: Number(event.target.value) })}>
+            <option value={1}>Top 1</option><option value={2}>Top 2</option><option value={3}>Top 3</option>
+          </select>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={schedule.emailEnabled} onCheckedChange={(checked) => setSchedule({ ...schedule, emailEnabled: checked === true })} />
+            Email me when ready
+          </label>
+          <Button onClick={() => void saveSchedule()} disabled={scheduleSaving}>
+            {scheduleSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save schedule
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="flex gap-2">
         {VERTICALS.map((v) => (

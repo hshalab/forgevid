@@ -49,6 +49,13 @@ export interface CreativeRow {
   status?: string | null
   url?: string | null
   thumbnail?: string | null
+  evidence?: {
+    strength: "insufficient" | "directional" | "confirmed"
+    views: number
+    leads: number
+    downstreamConversions: number
+    revenueCents: number
+  }
 }
 
 /** A CreativeRow plus the campaign context returned only by the winners feed. */

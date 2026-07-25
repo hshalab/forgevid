@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { getRecommendations } from '@/lib/inventory';
-import { buildGrowthDecisionPrompt, parseGrowthDecision } from '@/lib/growth-decision';
-import { hasLlmKey, llm, llmModel, llmProvider } from '@/lib/ai/llm';
+import { hasLlmKey, llmProvider } from '@/lib/ai/llm';
+import { runGrowthDecision } from '@/lib/growth-operator-run';
 
 export const runtime = 'nodejs';
 
@@ -31,52 +30,16 @@ export async function POST(req: NextRequest) {
   if (!opportunity) {
     return NextResponse.json({ error: 'Inventory item not found or no longer active.' }, { status: 404 });
   }
-  const prompt = buildGrowthDecisionPrompt(opportunity);
-  const audit = await prisma.aIGeneration.create({
-    data: {
-      userId: session.user.id,
-      type: 'GROWTH_DECISION',
-      prompt,
-      status: 'PROCESSING',
-    },
-    select: { id: true },
-  });
-
   try {
-    const completion = await llm.chat.completions.create({
-      model: llmModel('standard'),
-      messages: [
-        {
-          role: 'system',
-          content: 'Return a conservative, evidence-grounded JSON campaign decision. Never include markdown.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      max_tokens: 2048,
-      temperature: 0.2,
-    });
-    const raw = completion.choices[0]?.message?.content || '';
-    const decision = parseGrowthDecision(raw, itemId);
-    await prisma.aIGeneration.update({
-      where: { id: audit.id },
-      data: {
-        result: JSON.stringify(decision),
-        status: 'COMPLETED',
-        tokensUsed: completion.usage?.total_tokens ?? 0,
-      },
-    });
+    const result = await runGrowthDecision(session.user.id, opportunity);
     return NextResponse.json({
-      decision,
-      auditId: audit.id,
+      decision: result.decision,
+      auditId: result.auditId,
       provider: 'gemini',
-      model: llmModel('standard'),
+      model: result.model,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Gemini could not create a valid decision.';
-    await prisma.aIGeneration.update({
-      where: { id: audit.id },
-      data: { status: 'FAILED', result: JSON.stringify({ error: message }) },
-    });
     console.error('[growth-operator/decision]', message);
     return NextResponse.json({ error: 'Gemini could not create a valid campaign decision.' }, { status: 502 });
   }

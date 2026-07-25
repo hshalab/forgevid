@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ExternalLink, Loader2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Loader2, QrCode, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -212,11 +212,18 @@ export default function ApprovalsPage() {
                         </Button>
                       </>
                     ) : row.publicUrl ? (
-                      <Button asChild variant="outline">
-                        <a href={row.publicUrl} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-4 w-4" /> Open approved landing page
-                        </a>
-                      </Button>
+                      <>
+                        <Button asChild variant="outline">
+                          <a href={row.publicUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-4 w-4" /> Open approved landing page
+                          </a>
+                        </Button>
+                        <Button asChild variant="outline">
+                          <a href={`/api/ad-studio/creatives/${row.id}/qr`} download>
+                            <QrCode className="h-4 w-4" /> Download QR
+                          </a>
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </CardContent>

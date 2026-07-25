@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getCreativeEvidence } from '@/lib/growth-evidence'
 
 export const runtime = 'nodejs'
 
@@ -102,12 +103,15 @@ export async function GET() {
   ])
 
   const videoIds = creatives.map((c) => c.videoId).filter((v): v is string => !!v)
-  const videos = videoIds.length
-    ? await prisma.video.findMany({
+  const [videos, evidence] = await Promise.all([
+    videoIds.length
+      ? prisma.video.findMany({
         where: { id: { in: videoIds } },
         select: { id: true, status: true, url: true, fileUrl: true, thumbnail: true },
       })
-    : []
+      : Promise.resolve([]),
+    getCreativeEvidence(userId, creatives.map((creative) => creative.id)),
+  ])
   const vById = new Map(videos.map((v) => [v.id, v]))
 
   return NextResponse.json({
@@ -137,6 +141,7 @@ export async function GET() {
             rightsStatus: c.rightsStatus,
             revision: c.revision,
             approvedRevision: c.approvedRevision,
+            evidence: evidence.get(c.id),
           }
         }),
     })),
