@@ -606,3 +606,66 @@ Notes:
       `CLOUDINARY_*` is set and falls back to local disk otherwise, so web and
       worker need no shared disk. The renderer already fetches remote urls
       (`downloadFile`). Done 2026-07-20; tsc + build green.
+
+## 2026-07-25 — "Growth Operator" backlog triage
+
+Given a 200-item enterprise backlog (event sourcing, cryptographic evidence
+ledgers, dead-letter queues, circuit breakers, multi-vertical expansion,
+coupon/referral systems, judge-mode tenant, localization certification).
+That's 3–6 months of team work; we have until 2026-08-17, solo, and a
+parallel session already deep in the same schema. Triaged instead of
+building blindly:
+
+**Done today (safe, additive, zero collision risk):**
+- `evidence/PROVENANCE.md` — full git-history audit for hackathon
+  eligibility (COMP-001). Finding: **every one of the 157 commits in the
+  current repo is dated 2026-07-07 or later** — no earlier history is
+  recoverable (the old OneDrive `.git` is empty; OneDrive's placeholder
+  sync corrupted the prior working tree, per this file's own 2026-07-07
+  entry: 654 unretrievable placeholder files, 701 type-check errors, a
+  fabricated admin dashboard). The honest story: pre-existing code was
+  inert scaffold; the working product was built entirely inside the
+  verifiable window. Also folded in a COMP-003 spot-check: **no code path
+  posts to any social platform and no code path emails a prospect
+  directly** — `emailSample`/`emailClip` always send to the operator's own
+  inbox; DMs are copy-pasted by hand. Both are present-tense facts about
+  the current code, not yet backed by an automated test — add one before
+  the submission freeze (`SUB-003`).
+- `evidence/ORGANIZER-CLARIFICATION-DRAFT.txt` — drafted, not sent. Send
+  it yourself; an eligibility question directed at the competition body
+  needs a human's name on it, not an agent's.
+
+**Already built by the parallel session (checked via `git log` + schema —
+do not duplicate):** `approvedByUser` server-side gate on all three batch
+generation routes (vehicles/listings/products) — covers the human-approval
+requirement (`APP-001`/`COMP-003`) for that path. `/admin/evidence` +
+CSV export API — covers `EVID-004` (lite). `/api/testimonials` +
+`dashboard/testimonial` page — covers `EVID-003` consent capture.
+`ReferralAccount`/`ReferralSignup` models — covers `ATTR-005`.
+`AdCampaign`/`AdCreative` models (fields: `hook`, `cta`, `aspect`,
+`platform`, `isWinner`, `roas`) — most of `CAMP-001`/`CAMP-002`'s variant
+tracking already exists.
+
+**Genuine gap, confirmed by schema grep — no `Lead`, `Conversion`, or
+`RevenueEvent` model exists anywhere:** nothing currently links a specific
+campaign/video to a specific captured lead to a specific dollar of
+revenue. That's the real missing piece of `ATTR-004`/`CORE-001`. **Not
+touched this session** — it's a Prisma migration against a schema the
+parallel session is actively evolving (their last commit here was
+`328d1bc`, today); two agents running `prisma migrate dev` against the
+same DB concurrently is how migration history gets corrupted. Needs
+sequencing with whoever's driving that session next, not two agents
+racing on it.
+
+**Explicitly deferred (not started, not urgent for Aug 17):** event
+sourcing/idempotent webhook pipeline, cryptographic evidence hashing,
+dead-letter queues, circuit breakers, real-estate/e-commerce vertical
+*product* support beyond what already exists (`listings/batch`,
+`products/batch` routes already ship both), coupon codes beyond the
+existing referral model, judge-mode tenant + guided tour, full
+localization certification. Revisit only after the automotive/outbound
+loop has produced its first arms-length paying pilot.
+
+**Still the actual blocker on judged revenue:** Stripe LIVE mode
+(user-side, flagged repeatedly). No amount of attribution infrastructure
+produces revenue evidence until real payments can be collected.

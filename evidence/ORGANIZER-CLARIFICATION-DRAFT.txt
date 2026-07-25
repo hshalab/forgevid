@@ -1,0 +1,28 @@
+Subject: Eligibility question — pre-existing codebase, rebuilt/launched during the competition window
+
+Hi [organizer name / XPRIZE-Devpost support],
+
+I'm building ForgeVid (AI video generation SaaS, https://www.forgevid.com)
+for [hackathon name], deadline Aug 17, 2026. Before I finalize my
+submission I want to check one thing about eligibility rather than assume.
+
+The situation: an earlier, non-functional scaffold of this codebase existed
+before the competition window (it did not compile — 701 TypeScript errors —
+and had no working video pipeline, payments, or deployment). Starting
+2026-07-07, I rebuilt it into a working product: real AI video generation on
+Gemini, a live production deployment, and I'm now running paid customer
+pilots. My git history is complete and unmodified from 2026-07-07 forward;
+I have no verifiable record of the exact date the original scaffold was
+first created, only that it was inert.
+
+My question: does a project qualify if the pre-existing artifact was
+non-functional boilerplate, and all working functionality, the production
+launch, and revenue activity were built during the eligible window? Or does
+any pre-existing code (regardless of whether it worked) disqualify the
+project outright?
+
+I'd rather ask now than find out after submitting. Happy to share the repo
+or a timeline of commits if that helps you assess it.
+
+Thanks,
+[your name]
