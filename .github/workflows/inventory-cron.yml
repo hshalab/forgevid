@@ -1,0 +1,35 @@
+name: Inventory sources cron
+
+# Fires the scheduled-inventory-import endpoint. The endpoint itself decides
+# what is actually due (nextRunAt + daily/weekly cadence per source) and
+# claims each source atomically, so polling hourly is safe — most runs are
+# a cheap no-op ({processed: 0}).
+#
+# Auth is a Bearer CRON_SECRET (GitHub Actions secret, must match Railway's
+# CRON_SECRET env var). NOTE: GitHub disables schedules in public repos
+# after 60 days without repo activity — a non-issue while development is
+# active, but worth knowing if this repo ever goes quiet.
+
+on:
+  schedule:
+    - cron: '0 * * * *' # hourly, on the hour (UTC)
+  workflow_dispatch: {} # manual trigger for verification
+
+permissions: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/inventory-sources
+        run: |
+          code=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "https://www.forgevid.com/api/cron/inventory-sources" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $code"
+          cat response.json
+          if [ "$code" != "200" ]; then
+            echo "Cron endpoint returned $code" >&2
+            exit 1
+          fi

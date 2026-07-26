@@ -31,6 +31,10 @@ function isCsrfExemptApiPath(pathname: string): boolean {
     // visitor is a stranger with no ForgeVid session/cookie to protect;
     // there's no ambient authority for a forged cross-site POST to abuse.
     pathname.startsWith('/api/l/') ||
+    // Scheduler-invoked endpoints (external cron POSTs a Bearer CRON_SECRET;
+    // no browser session exists, so double-submit CSRF can never pass and
+    // isn't the right control — the shared secret is).
+    pathname.startsWith('/api/cron/') ||
     NEXTAUTH_CSRF_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
