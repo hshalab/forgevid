@@ -18,6 +18,7 @@
 import OpenAI from 'openai';
 import { openAiApiKey } from '../openai-key';
 import { lazyClient } from '../lazy-client';
+import { withProviderReliability } from '../provider-reliability';
 
 export type LlmProvider = 'openai' | 'gemini';
 
@@ -50,10 +51,13 @@ const GEMINI_BASE_URL =
 
 /** Construct a fresh client for the active provider (rarely needed directly). */
 export function createLlmClient(): OpenAI {
-  if (llmProvider() === 'gemini') {
-    return new OpenAI({ apiKey: geminiApiKey(), baseURL: GEMINI_BASE_URL });
-  }
-  return new OpenAI({ apiKey: openAiApiKey() });
+  const client = llmProvider() === 'gemini'
+    ? new OpenAI({ apiKey: geminiApiKey(), baseURL: GEMINI_BASE_URL })
+    : new OpenAI({ apiKey: openAiApiKey() });
+  const originalCreate = client.chat.completions.create.bind(client.chat.completions);
+  client.chat.completions.create = ((...args: Parameters<typeof originalCreate>) =>
+    withProviderReliability('llm', () => originalCreate(...args))) as typeof client.chat.completions.create;
+  return client;
 }
 
 /** Shared lazy client — import this instead of constructing new OpenAI(...). */

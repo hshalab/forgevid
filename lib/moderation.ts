@@ -18,6 +18,7 @@
  */
 import { hasOpenAiKey, openAiApiKey } from './openai-key';
 import { prisma } from './prisma';
+import { withProviderReliability } from './provider-reliability';
 
 const MODEL = 'omni-moderation-latest';
 
@@ -53,7 +54,8 @@ export async function moderateText(text: string): Promise<ModerationResult> {
   if (!trimmed || !hasOpenAiKey()) return OK;
   try {
     const openai = await client();
-    const res = await openai.moderations.create({ model: MODEL, input: trimmed.slice(0, 8000) });
+    const res = await withProviderReliability('openai', () =>
+      openai.moderations.create({ model: MODEL, input: trimmed.slice(0, 8000) }));
     const hits = blocked(res.results?.[0]);
     if (hits.length === 0) return OK;
     console.warn('[Moderation] text blocked:', hits.join(', '));
@@ -72,10 +74,10 @@ export async function moderateImageUrl(url: string): Promise<ModerationResult> {
   }
   try {
     const openai = await client();
-    const res = await openai.moderations.create({
+    const res = await withProviderReliability('openai', () => openai.moderations.create({
       model: MODEL,
       input: [{ type: 'image_url', image_url: { url } }],
-    } as never);
+    } as never));
     const hits = blocked(res.results?.[0]);
     if (hits.length === 0) return OK;
     console.warn('[Moderation] image blocked:', hits.join(', '));

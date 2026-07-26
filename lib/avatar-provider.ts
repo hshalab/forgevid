@@ -13,6 +13,7 @@
  */
 
 import type { AspectRatio } from './video-generator';
+import { withProviderReliability } from './provider-reliability';
 
 const API_BASE = 'https://api.heygen.com';
 
@@ -71,9 +72,9 @@ export function buildAvatarVideoPayload(args: {
 
 /** List the account's available avatars. */
 export async function listAvatars(): Promise<AvatarInfo[]> {
-  const response = await fetch(`${API_BASE}/v2/avatars`, {
+  const response = await withProviderReliability('heygen', () => fetch(`${API_BASE}/v2/avatars`, {
     headers: { 'X-Api-Key': apiKey(), Accept: 'application/json' },
-  });
+  }));
   if (!response.ok) {
     throw new Error(`Avatar list failed (${response.status})`);
   }
@@ -95,7 +96,7 @@ export async function createAvatarVideo(args: {
   aspectRatio: AspectRatio;
   voiceId?: string | null;
 }): Promise<string> {
-  const response = await fetch(`${API_BASE}/v2/video/generate`, {
+  const response = await withProviderReliability('heygen', () => fetch(`${API_BASE}/v2/video/generate`, {
     method: 'POST',
     headers: {
       'X-Api-Key': apiKey(),
@@ -103,7 +104,7 @@ export async function createAvatarVideo(args: {
       Accept: 'application/json',
     },
     body: JSON.stringify(buildAvatarVideoPayload(args)),
-  });
+  }));
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     throw new Error(`Avatar render failed to start (${response.status}): ${detail.slice(0, 200)}`);
@@ -122,10 +123,10 @@ export interface AvatarVideoStatus {
 
 /** Poll a render. Terminal states: completed (with url) or failed (with reason). */
 export async function getAvatarVideoStatus(providerVideoId: string): Promise<AvatarVideoStatus> {
-  const response = await fetch(
+  const response = await withProviderReliability('heygen', () => fetch(
     `${API_BASE}/v1/video_status.get?video_id=${encodeURIComponent(providerVideoId)}`,
     { headers: { 'X-Api-Key': apiKey(), Accept: 'application/json' } },
-  );
+  ));
   if (!response.ok) {
     throw new Error(`Avatar status check failed (${response.status})`);
   }

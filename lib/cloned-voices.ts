@@ -14,6 +14,7 @@
 
 import { prisma } from './prisma';
 import { isKnownVoice, DEFAULT_VOICE_ID } from './voice-catalog';
+import { withProviderReliability } from './provider-reliability';
 
 export interface ClonedVoiceInfo {
   id: string;
@@ -86,11 +87,11 @@ export async function cloneVoiceFromSample(args: {
     args.sampleFilename,
   );
 
-  const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
+  const response = await withProviderReliability('elevenlabs', () => fetch('https://api.elevenlabs.io/v1/voices/add', {
     method: 'POST',
     headers: { 'xi-api-key': apiKey },
     body: form,
-  });
+  }));
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');

@@ -19,6 +19,7 @@ async function main() {
   const { Worker } = await import('bullmq');
   const { getRedisConnection, GENERATION_QUEUE_NAME } = await import('../lib/video-queue');
   const { runGeneration, rerenderVideo } = await import('../lib/generation-pipeline');
+  const { prisma } = await import('../lib/prisma');
 
   const connection = getRedisConnection();
   if (!connection) {
@@ -52,11 +53,23 @@ async function main() {
   );
 
   worker.on('completed', (job) => console.log(`[worker] completed ${job.id}`));
-  worker.on('failed', (job, err) => {
+  worker.on('failed', async (job, err) => {
     console.error(`[worker] failed ${job?.id}: ${err?.message}`);
     Sentry?.captureException(err, {
       tags: { videoId: job?.data?.videoId, kind: job?.data?.kind },
     });
+    if (job && job.attemptsMade >= Number(job.opts.attempts || 1)) {
+      await prisma.generationDeadLetter.create({
+        data: {
+          userId: job.data.userId,
+          videoId: job.data.videoId,
+          kind: job.data.kind,
+          jobData: JSON.stringify(job.data),
+          error: String(err?.message || 'Generation failed').slice(0, 2000),
+          attempts: job.attemptsMade,
+        },
+      }).catch((recordError) => console.error('[worker] could not persist dead letter:', recordError));
+    }
   });
 
   console.log(`[worker] listening on "${GENERATION_QUEUE_NAME}" (concurrency ${concurrency})`);

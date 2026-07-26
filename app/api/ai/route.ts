@@ -17,6 +17,7 @@ import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
 import { moderateText, recordModerationBlock } from '@/lib/moderation';
 import { allows4k } from '@/lib/plan';
 import { withRenderSlot } from '@/lib/render-semaphore';
+import { withProviderReliability } from '@/lib/provider-reliability';
 
 const aiGenerationSchema = z.object({
   prompt: z.string().min(1).max(2000),
@@ -33,7 +34,7 @@ const openai = lazyClient<OpenAI>(() => new OpenAI({
 
 async function synthesizeWithElevenLabs(text: string, voiceId?: string) {
   try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${resolveVoiceId(voiceId)}`, {
+    const response = await withProviderReliability('elevenlabs', () => fetch(`https://api.elevenlabs.io/v1/text-to-speech/${resolveVoiceId(voiceId)}`, {
       method: 'POST',
       headers: {
         'Accept': 'audio/mpeg',
@@ -48,7 +49,7 @@ async function synthesizeWithElevenLabs(text: string, voiceId?: string) {
           similarity_boost: 0.5
         }
       })
-    });
+    }));
 
     if (!response.ok) {
       throw new Error(`ElevenLabs API error: ${response.statusText}`);
@@ -313,13 +314,13 @@ async function processAIGeneration(type: string, prompt: string, settings?: Reco
         };
       
       case 'IMAGE_GENERATION':
-        const imageResponse = await openai.images.generate({
+        const imageResponse = await withProviderReliability('openai', () => openai.images.generate({
           model: 'dall-e-3',
           prompt: prompt,
           n: 1,
           size: settings?.size || '1024x1024',
           quality: settings?.quality || 'standard'
-        });
+        }));
         return {
           result: imageResponse.data?.[0]?.url || '',
           tokensUsed: 0,

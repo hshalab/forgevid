@@ -1071,6 +1071,24 @@ model CampaignApprovalEvent {
   @@map("campaign_approval_events")
 }
 
+model GenerationDeadLetter {
+  id          String   @id @default(cuid())
+  userId      String
+  videoId     String
+  kind        String
+  jobData     String
+  error       String
+  attempts    Int
+  status      String   @default("PENDING") // "PENDING" | "REPLAYED" | "RESOLVED"
+  replayedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([videoId])
+  @@map("generation_dead_letters")
+}
+
 /// Non-AI operating costs — hosting, contractor, tool subscriptions, paid
 /// marketing spend — kept separate from AIGeneration.cost (API cost only) so
 /// the evidence dashboard can report a real P&L, not just inference cost.

@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { BarChart3, Play, CheckCircle2, Loader2, ArrowUpRight, Timer, Film } from "lucide-react"
+import { useGrowthLocale } from "@/hooks/use-growth-locale"
 
 interface Analytics {
   summary: {
@@ -64,6 +65,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 }
 
 export default function AnalyticsPage() {
+  const { t } = useGrowthLocale()
   const [data, setData] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -81,7 +83,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground py-16 justify-center">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading your analytics…
+        <Loader2 className="h-5 w-5 animate-spin" /> {t("loading")}
       </div>
     )
   }
@@ -155,7 +157,7 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("analyticsTitle")}</h1>
         <p className="text-muted-foreground">Your real video activity, straight from your library.</p>
       </div>
 
@@ -234,7 +236,7 @@ export default function AnalyticsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Growth impact ledger</CardTitle>
+          <CardTitle>{t("impactLedger")}</CardTitle>
           <CardDescription>Observed landing activity and customer-recorded outcomes. ForgeVid never infers a sale or revenue.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">

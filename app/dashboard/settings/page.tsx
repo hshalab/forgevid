@@ -79,6 +79,10 @@ export default function SettingsPage() {
               email: data.user.email ?? "",
               bio: data.user.bio ?? "",
             },
+            preferences: {
+              ...prev.preferences,
+              ...(data.user.preferences || {}),
+            },
           }))
         }
       })
@@ -93,20 +97,19 @@ export default function SettingsPage() {
   }, [])
 
   const handleSaveSettings = async (section: string) => {
-    if (section !== "profile") {
-      // Only the profile section persists today; notifications/preferences/
-      // privacy are still local-only UI state.
+    if (section !== "profile" && section !== "preferences") {
       return
     }
-    setSaving("profile")
+    setSaving(section)
     setSaveMsg("")
     try {
       const res = await fetch("/api/user/profile", {
         method: "PUT",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
-          name: settings.profile.name,
-          bio: settings.profile.bio,
+          ...(section === "profile"
+            ? { name: settings.profile.name, bio: settings.profile.bio }
+            : { preferences: settings.preferences }),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -115,7 +118,7 @@ export default function SettingsPage() {
         return
       }
       // Push the new name into the session so the sidebar updates immediately.
-      await updateSession({ name: settings.profile.name })
+      if (section === "profile") await updateSession({ name: settings.profile.name })
       setSaveMsg("Saved ✓")
     } catch {
       setSaveMsg("Network error. Please try again.")

@@ -4,6 +4,7 @@
  */
 
 import { v2 as cloudinary } from 'cloudinary';
+import { withProviderReliability } from './provider-reliability';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -40,13 +41,13 @@ export async function uploadVideo(
   options: UploadOptions = {}
 ): Promise<UploadResult> {
   try {
-    const result = await cloudinary.uploader.upload(filePath, {
+    const result = await withProviderReliability('cloudinary', () => cloudinary.uploader.upload(filePath, {
       resource_type: 'video',
       folder: options.folder || 'forgevid/videos',
       quality: 'auto',
       fetch_format: 'auto',
       ...options,
-    });
+    }));
 
     return {
       public_id: result.public_id,
@@ -72,7 +73,7 @@ export async function uploadBuffer(
   options: UploadOptions = {}
 ): Promise<UploadResult> {
   try {
-    return new Promise((resolve, reject) => {
+    return withProviderReliability('cloudinary', () => new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: 'video',
@@ -101,7 +102,7 @@ export async function uploadBuffer(
       );
 
       uploadStream.end(buffer);
-    });
+    }));
   } catch (error) {
     console.error('Cloudinary buffer upload error:', error);
     throw new Error(`Failed to upload buffer: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -116,13 +117,13 @@ export async function uploadImage(
   options: UploadOptions = {}
 ): Promise<UploadResult> {
   try {
-    const result = await cloudinary.uploader.upload(filePath, {
+    const result = await withProviderReliability('cloudinary', () => cloudinary.uploader.upload(filePath, {
       resource_type: 'image',
       folder: options.folder || 'forgevid/images',
       quality: 'auto',
       fetch_format: 'auto',
       ...options,
-    });
+    }));
 
     return {
       public_id: result.public_id,
@@ -144,9 +145,9 @@ export async function uploadImage(
  */
 export async function deleteResource(publicId: string, resourceType: 'image' | 'video' = 'video'): Promise<void> {
   try {
-    await cloudinary.uploader.destroy(publicId, {
+    await withProviderReliability('cloudinary', () => cloudinary.uploader.destroy(publicId, {
       resource_type: resourceType,
-    });
+    }));
   } catch (error) {
     console.error('Cloudinary delete error:', error);
     throw new Error(`Failed to delete resource: ${error instanceof Error ? error.message : 'Unknown error'}`);

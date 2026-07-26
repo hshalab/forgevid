@@ -13,6 +13,10 @@ function readBio(metadata: string | null): string {
     return ''
   }
 }
+const LANGUAGES = new Set(['en', 'es', 'hi', 'zh', 'ja', 'fr', 'it', 'ko', 'pt', 'de'])
+function readMetadata(metadata: string | null): Record<string, any> {
+  try { return metadata ? JSON.parse(metadata) : {} } catch { return {} }
+}
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -36,6 +40,7 @@ export async function GET(_req: NextRequest) {
       email: user.email,
       image: user.image,
       bio: readBio(user.metadata),
+      preferences: readMetadata(user.metadata).preferences ?? { language: 'en' },
     },
   })
 }
@@ -91,6 +96,27 @@ export async function PUT(req: NextRequest) {
     data.metadata = JSON.stringify(meta)
   }
 
+  if (body.preferences !== undefined) {
+    const preferences = body.preferences as Record<string, unknown>
+    const language = String(preferences?.language || '')
+    const timezone = String(preferences?.timezone || 'UTC')
+    if (!LANGUAGES.has(language) || timezone.length > 80) {
+      return NextResponse.json({ error: 'Invalid preferences' }, { status: 400 })
+    }
+    const current = await prisma.user.findUnique({ where: { id: session.user.id }, select: { metadata: true } })
+    const meta = readMetadata(data.metadata ?? current?.metadata ?? null)
+    meta.preferences = {
+      language,
+      timezone,
+      theme: ['light', 'dark', 'system'].includes(String(preferences.theme)) ? preferences.theme : 'system',
+      autoSave: preferences.autoSave !== false,
+      qualityPreference: ['low', 'medium', 'high'].includes(String(preferences.qualityPreference))
+        ? preferences.qualityPreference
+        : 'high',
+    }
+    data.metadata = JSON.stringify(meta)
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 })
   }
@@ -109,6 +135,7 @@ export async function PUT(req: NextRequest) {
       email: updated.email,
       image: updated.image,
       bio: readBio(updated.metadata),
+      preferences: readMetadata(updated.metadata).preferences ?? { language: 'en' },
     },
   })
 }

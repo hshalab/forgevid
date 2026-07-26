@@ -18,6 +18,7 @@ import { spawnSync } from 'child_process';
 import { hasOpenAiKey, openAiApiKey } from './openai-key';
 import { resolveFfmpegPath } from './ffmpeg-env';
 import type * as fsTypes from 'fs';
+import { withProviderReliability } from './provider-reliability';
 
 /** Whisper rejects anything over 25MB with a 413. */
 const WHISPER_MAX_BYTES = 25 * 1024 * 1024;
@@ -228,13 +229,13 @@ export async function transcribeToCues(audioPath: string): Promise<CaptionCue[] 
     const sendPath = compressed ?? audioPath;
     let result: any;
     try {
-      result = await openai.audio.transcriptions.create({
+      result = await withProviderReliability('openai', () => openai.audio.transcriptions.create({
         file: fs.createReadStream(sendPath) as any,
         model: 'whisper-1',
         response_format: 'verbose_json',
         // Word timing costs nothing extra and powers the karaoke caption style.
         timestamp_granularities: ['word', 'segment'],
-      });
+      }));
     } finally {
       if (compressed) fs.rmSync(compressed, { force: true });
     }
@@ -299,11 +300,11 @@ export async function transcribeAudioToText(audioPath: string): Promise<string |
     const sendPath = compressed ?? audioPath;
     let result: any;
     try {
-      result = await openai.audio.transcriptions.create({
+      result = await withProviderReliability('openai', () => openai.audio.transcriptions.create({
         file: fs.createReadStream(sendPath) as any,
         model: 'whisper-1',
         response_format: 'text',
-      });
+      }));
     } finally {
       if (compressed) fs.rmSync(compressed, { force: true });
     }

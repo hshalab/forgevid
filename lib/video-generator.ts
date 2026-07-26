@@ -46,6 +46,7 @@ import {
 import { resolveFfmpegPath, supportsFilter } from './ffmpeg-env';
 import { buildKenBurnsFilter, directionForScene } from './ken-burns';
 import type { UserMediaItem } from './user-media';
+import { withProviderReliability } from './provider-reliability';
 import { buildSceneQueries } from './stock-query';
 import { buildLowerThirdFilter, type LowerThird } from './lower-third';
 import {
@@ -453,7 +454,7 @@ async function generateVoiceover(narration: string, voiceId?: string): Promise<s
     const voice = voiceId || DEFAULT_VOICE_ID;
     console.log(`[Video Generator] Generating voiceover (${textToSpeak.length} chars, voice ${voice})...`);
 
-    const response = await fetch(
+    const response = await withProviderReliability('elevenlabs', () => fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voice}`,
       {
         method: 'POST',
@@ -468,7 +469,7 @@ async function generateVoiceover(narration: string, voiceId?: string): Promise<s
           voice_settings: { stability: 0.6, similarity_boost: 0.6 },
         }),
       }
-    );
+    ));
 
     if (!response.ok) {
       console.error(`[Video Generator] ElevenLabs error: ${response.status} ${response.statusText}`);
@@ -512,14 +513,14 @@ export async function searchStockVideos(
   if (!pexelsClient) return [];
 
   try {
-    const response = await pexelsClient.videos.search({
+    const response: any = await withProviderReliability('pexels', () => pexelsClient.videos.search({
       query,
       per_page: limit,
       size: 'large',
       // Matching orientation matters: landscape footage in a 9:16 frame is
       // mostly letterbox.
       orientation,
-    });
+    }));
 
     if ('videos' in response && response.videos) {
       return response.videos
@@ -561,7 +562,8 @@ export async function searchStockPhotos(
   if (!pexelsClient) return [];
 
   try {
-    const response = await pexelsClient.photos.search({ query, per_page: limit, orientation });
+    const response: any = await withProviderReliability('pexels', () =>
+      pexelsClient.photos.search({ query, per_page: limit, orientation }));
     if ('photos' in response && response.photos) {
       return response.photos
         .map((photo: any) => ({

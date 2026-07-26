@@ -22,6 +22,15 @@ interface VideoRow {
   createdAt: string
   updatedAt?: string
 }
+interface DeadLetterRow {
+  id: string
+  videoId: string
+  kind: string
+  error: string
+  attempts: number
+  status: string
+  createdAt: string
+}
 
 function formatDuration(sec?: number | null): string {
   if (sec == null) return ""
@@ -56,6 +65,7 @@ export default function VideosPage() {
   const [selectedTab, setSelectedTab] = useState("all")
   const [selectedVideo, setSelectedVideo] = useState<VideoRow | null>(null)
   const [isPlayerOpen, setIsPlayerOpen] = useState(false)
+  const [deadLetters, setDeadLetters] = useState<DeadLetterRow[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadVideos = useCallback(async () => {
@@ -72,7 +82,21 @@ export default function VideosPage() {
 
   useEffect(() => {
     loadVideos()
+    fetch("/api/videos/dead-letter").then((response) => response.ok ? response.json() : null)
+      .then((data) => setDeadLetters(data?.jobs?.filter((job: DeadLetterRow) => job.status === "PENDING") || []))
+      .catch(() => {})
   }, [loadVideos])
+
+  const handleDeadLetter = async (id: string, action: "replay" | "resolve") => {
+    const response = await fetch("/api/videos/dead-letter", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) return alert(data.error || "Could not update the failed job.")
+    setDeadLetters((current) => current.filter((item) => item.id !== id))
+  }
 
   const filteredVideos = videos.filter((v) => {
     const matchesSearch = (v.title || "").toLowerCase().includes(searchQuery.toLowerCase())
@@ -173,6 +197,23 @@ export default function VideosPage() {
           </Button>
         </div>
       </div>
+
+      {deadLetters.length > 0 && (
+        <Card className="mb-8 border-amber-500/40">
+          <CardContent className="space-y-3 p-6">
+            <div><h2 className="font-semibold">Failed render review</h2><p className="text-sm text-muted-foreground">Final failures are retained for review. Replay is always a manual action.</p></div>
+            {deadLetters.map((job) => (
+              <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                <span>{job.kind} · {job.attempts} attempts · {job.error}</span>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => void handleDeadLetter(job.id, "replay")}>Replay</Button>
+                  <Button size="sm" variant="outline" onClick={() => void handleDeadLetter(job.id, "resolve")}>Dismiss</Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards — real */}
       <div className="grid md:grid-cols-4 gap-6 mb-8">

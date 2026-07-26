@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Sparkles, TrendingUp, CalendarClock } from "lucide-react"
+import { useGrowthLocale } from "@/hooks/use-growth-locale"
 
 interface Opportunity {
   itemId: string
@@ -48,6 +49,7 @@ const VERTICALS = [
 ]
 
 export default function RecommendationsPage() {
+  const { t } = useGrowthLocale()
   const [items, setItems] = useState<Opportunity[]>([])
   const [vertical, setVertical] = useState("")
   const [isLoading, setIsLoading] = useState(true)
@@ -187,17 +189,15 @@ export default function RecommendationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">What to promote next</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("recommendationsTitle")}</h1>
         <p className="text-muted-foreground">
-          Scored from your own inventory history — days listed, whether it has a recent video, and whether
-          its price changed since the last one. Import at least once with a feed URL to build history; this
-          list gets smarter every time you re-import.
+          {t("recommendationsDescription")}
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg"><CalendarClock className="h-5 w-5" /> Scheduled Growth Operator</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-lg"><CalendarClock className="h-5 w-5" /> {t("scheduledOperator")}</CardTitle>
           <CardDescription>
             Explicit opt-in. ForgeVid may prepare recommendations and notify you; it never generates campaigns, publishes, or messages prospects automatically.
           </CardDescription>
@@ -218,7 +218,7 @@ export default function RecommendationsPage() {
             Email me when ready
           </label>
           <Button onClick={() => void saveSchedule()} disabled={scheduleSaving}>
-            {scheduleSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save schedule
+            {scheduleSaving && <Loader2 className="h-4 w-4 animate-spin" />} {t("saveSchedule")}
           </Button>
         </CardContent>
       </Card>
@@ -290,7 +290,7 @@ export default function RecommendationsPage() {
                     {deciding === item.itemId
                       ? <Loader2 className="h-4 w-4 animate-spin" />
                       : <Sparkles className="h-4 w-4" />}
-                    Ask Gemini for campaign decision
+                    {t("reviewDecision")}
                   </Button>
                 </div>
                 {decisions[item.itemId] && (
@@ -325,7 +325,7 @@ export default function RecommendationsPage() {
                         {generating === item.itemId
                           ? <Loader2 className="h-4 w-4 animate-spin" />
                           : <Sparkles className="h-4 w-4" />}
-                        Generate campaign
+                        {t("generateCampaign")}
                       </Button>
                     )}
                   </div>

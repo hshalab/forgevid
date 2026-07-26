@@ -174,9 +174,20 @@ async function checkGemini() {
     const completion = await gemini.chat.completions.create({
       model: llmModel('fast'),
       messages: [{ role: 'user', content: 'Reply with exactly: ok' }],
-      max_tokens: 5,
+      // Current Gemini compat models may consume a few tokens internally
+      // before emitting visible text, so five tokens can yield a successful
+      // response with an empty message.
+      max_tokens: 64,
     });
     const reply = completion.choices[0]?.message?.content?.trim().toLowerCase() ?? '';
+    if (!reply) {
+      console.log('      Gemini diagnostic:', JSON.stringify({
+        model: completion.model,
+        finishReason: completion.choices[0]?.finish_reason,
+        refusal: completion.choices[0]?.message?.refusal,
+        usage: completion.usage,
+      }));
+    }
     assert(reply.includes('ok'), `Gemini completion works (reply: "${reply}")`);
     return true;
   } finally {

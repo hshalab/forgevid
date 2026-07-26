@@ -23,6 +23,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveFfmpegPath } from './ffmpeg-env';
 import { DEFAULT_TTS_MODEL, DEFAULT_VOICE_ID } from './voice-catalog';
+import { withProviderReliability } from './provider-reliability';
 
 export interface SceneLine {
   id: string;
@@ -73,7 +74,7 @@ export async function elevenLabsSynth(text: string, voiceId: string): Promise<Bu
   if (!apiKey) return null;
 
   try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    const response = await withProviderReliability('elevenlabs', () => fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
       headers: {
         Accept: 'audio/mpeg',
@@ -85,7 +86,7 @@ export async function elevenLabsSynth(text: string, voiceId: string): Promise<Bu
         model_id: DEFAULT_TTS_MODEL,
         voice_settings: { stability: 0.6, similarity_boost: 0.6 },
       }),
-    });
+    }));
     if (!response.ok) {
       console.error(`[Voiceover] ElevenLabs ${response.status} for a scene line`);
       return null;

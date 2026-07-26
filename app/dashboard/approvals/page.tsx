@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { useGrowthLocale } from "@/hooks/use-growth-locale";
 
 interface ApprovalRow {
   id: string;
@@ -39,6 +40,7 @@ interface ApprovalRow {
 const FILTERS = ["AWAITING_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED", "ALL"];
 
 export default function ApprovalsPage() {
+  const { t } = useGrowthLocale();
   const [rows, setRows] = useState<ApprovalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,10 +137,10 @@ export default function ApprovalsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
-            <ShieldCheck className="h-7 w-7 text-primary" /> Campaign approvals
+            <ShieldCheck className="h-7 w-7 text-primary" /> {t("approvalsTitle")}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Review the exact revision. ForgeVid never publishes or contacts prospects automatically.
+            {t("noAutopublish")}
           </p>
         </div>
         <Button variant="outline" onClick={() => void load()} disabled={loading}>
@@ -228,7 +230,7 @@ export default function ApprovalsPage() {
 
                   {row.history && row.history.length > 0 && (
                     <details className="rounded-md border p-3 text-sm">
-                      <summary className="cursor-pointer font-medium">Immutable revision history ({row.history.length})</summary>
+                      <summary className="cursor-pointer font-medium">{t("immutableHistory")} ({row.history.length})</summary>
                       <div className="mt-3 space-y-3">
                         {row.history.map((event) => (
                           <div key={event.id} className="border-l-2 pl-3">
