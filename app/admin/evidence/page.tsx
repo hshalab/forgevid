@@ -2,11 +2,13 @@ import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getHackathonEvidence } from '@/lib/hackathon-evidence'
+import { verifyEvidenceLedger } from '@/lib/evidence-ledger'
 
 export const dynamic = 'force-dynamic'
 
 export default async function HackathonEvidencePage() {
   const evidence = await getHackathonEvidence()
+  const ledger = await verifyEvidenceLedger()
   const s = evidence.summary
   const activation = s.users ? Math.round((s.activatedUsers / s.users) * 100) : 0
   const retention = s.activatedUsers ? Math.round((s.repeatUsers / s.activatedUsers) * 100) : 0
@@ -38,6 +40,8 @@ export default async function HackathonEvidencePage() {
           <Button asChild variant="outline"><Link href="/admin/leads">Manage leads</Link></Button>
           <Button asChild variant="outline"><Link href="/admin/operating-costs">Manage costs</Link></Button>
           <Button asChild><Link href="/api/admin/hackathon-evidence/csv">Export CSV</Link></Button>
+          <Button asChild><Link href="/api/admin/hackathon-evidence/package">Signed JSON</Link></Button>
+          <Button asChild><Link href="/api/admin/hackathon-evidence/pdf">Judge PDF</Link></Button>
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -68,6 +72,16 @@ export default async function HackathonEvidencePage() {
           <CardContent className="text-2xl font-bold">${relatedPartyTotal.toFixed(2)}</CardContent>
         </Card>
       )}
+      <Card>
+        <CardHeader><CardTitle>Append-only integrity chain</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p className={ledger.valid ? 'text-green-500' : 'text-red-500'}>
+            {ledger.valid ? 'Valid' : 'Invalid'} · {ledger.count} records
+          </p>
+          <p className="break-all font-mono text-xs text-muted-foreground">Head SHA-256: {ledger.headHash}</p>
+          <p className="text-muted-foreground">Database triggers reject updates and deletes. Corrections are appended as superseding records.</p>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader><CardTitle>Evidence definitions</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">

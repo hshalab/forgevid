@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { appendEvidence } from '@/lib/evidence-ledger';
+import { recordApprovalEvent } from '@/lib/approval-events';
 
 export const runtime = 'nodejs';
 const ACTIONS = new Set(['approve', 'reject', 'request_revision', 'resubmit']);
@@ -58,6 +60,14 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         reviewNote: note || null,
       },
     });
+    await recordApprovalEvent({ creative: updated, action, actorUserId: session.user.id, rightsConfirmed: true, note });
+    await appendEvidence({
+      kind: 'campaign.approved',
+      entityType: 'AdCreative',
+      entityId: updated.id,
+      actorUserId: session.user.id,
+      payload: { action, revision: updated.revision, approvedRevision: updated.approvedRevision, rightsStatus: updated.rightsStatus, note },
+    });
     return NextResponse.json({ creative: updated, publicUrl: `/l/${updated.id}` });
   }
 
@@ -84,5 +94,19 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
           reviewNote: note,
         };
   const updated = await prisma.adCreative.update({ where: { id }, data });
+  await recordApprovalEvent({
+    creative: updated,
+    action,
+    actorUserId: session.user.id,
+    rightsConfirmed: false,
+    note,
+  });
+  await appendEvidence({
+    kind: `campaign.${action}`,
+    entityType: 'AdCreative',
+    entityId: updated.id,
+    actorUserId: session.user.id,
+    payload: { action, revision: updated.revision, approvalStatus: updated.approvalStatus, note },
+  });
   return NextResponse.json({ creative: updated, publicUrl: null });
 }

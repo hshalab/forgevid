@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { appendEvidence } from '@/lib/evidence-ledger'
 
 const conversionSchema = z.object({
   creativeId: z.string().min(1),
@@ -67,6 +68,21 @@ export async function POST(request: NextRequest) {
       currency: parsed.data.currency.toLowerCase(),
       notes: parsed.data.notes || null,
       occurredAt: new Date(parsed.data.occurredAt),
+    },
+  })
+  await appendEvidence({
+    kind: 'conversion.recorded',
+    entityType: 'GrowthConversion',
+    entityId: conversion.id,
+    actorUserId: ownerId,
+    payload: {
+      creativeId: conversion.creativeId,
+      kind: conversion.kind,
+      source: conversion.source,
+      externalId: conversion.externalId,
+      revenueCents: conversion.revenueCents,
+      currency: conversion.currency,
+      occurredAt: conversion.occurredAt.toISOString(),
     },
   })
   return NextResponse.json({ conversion }, { status: 201 })

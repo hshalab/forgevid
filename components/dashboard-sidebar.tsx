@@ -20,6 +20,7 @@ import {
   Rss,
   TrendingUp,
   ShieldCheck,
+  ClipboardCheck,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -88,6 +89,9 @@ export function DashboardSidebar() {
   const planLabel = planId ? PLAN_LABELS[planId] ?? planId : "…"
   const initials = initialsFrom(session?.user?.name, session?.user?.email)
   const isPaid = !!planId && planId !== "free"
+  const visibleNavigation = session?.user?.email?.toLowerCase() === "judge@forgevid.com"
+    ? [...navigation, { name: "Judge Tour", href: "/dashboard/judge", icon: ClipboardCheck, badge: "Start" }]
+    : navigation
 
   return (
     <div className="flex flex-col w-64 bg-sidebar border-r border-sidebar-border">
@@ -121,7 +125,7 @@ export function DashboardSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href))
           return (
             <Link

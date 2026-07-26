@@ -1033,6 +1033,44 @@ model GrowthOperatorSchedule {
   @@map("growth_operator_schedules")
 }
 
+/// Tamper-evident, append-only audit chain. Database triggers reject UPDATE
+/// and DELETE so corrections are represented by superseding records.
+model EvidenceRecord {
+  id             String   @id @default(cuid())
+  sequence       BigInt   @unique
+  kind           String
+  entityType     String?
+  entityId       String?
+  actorUserId    String?
+  payload        String
+  payloadHash    String
+  previousHash   String
+  recordHash     String   @unique
+  supersedesId   String?
+  createdAt      DateTime @default(now())
+
+  @@index([kind, createdAt])
+  @@index([entityType, entityId])
+  @@map("evidence_records")
+}
+
+model CampaignApprovalEvent {
+  id              String   @id @default(cuid())
+  creativeId      String
+  revision        Int
+  action          String
+  actorUserId     String
+  rightsConfirmed Boolean  @default(false)
+  note            String?
+  snapshot        String
+  snapshotHash    String
+  createdAt       DateTime @default(now())
+
+  @@index([creativeId, revision, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("campaign_approval_events")
+}
+
 /// Non-AI operating costs — hosting, contractor, tool subscriptions, paid
 /// marketing spend — kept separate from AIGeneration.cost (API cost only) so
 /// the evidence dashboard can report a real P&L, not just inference cost.

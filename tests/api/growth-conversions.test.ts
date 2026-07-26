@@ -23,6 +23,7 @@ jest.mock('next/server', () => {
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
+jest.mock('@/lib/evidence-ledger', () => ({ appendEvidence: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     adCreative: { findFirst: jest.fn() },
@@ -52,7 +53,16 @@ describe('Growth conversion attribution', () => {
     session.mockResolvedValue({ user: { id: 'user-1' } } as any)
     creative.findFirst.mockResolvedValue({ id: 'creative-1' } as any)
     conversions.findFirst.mockResolvedValue(null)
-    conversions.create.mockResolvedValue({ id: 'conversion-1' } as any)
+    conversions.create.mockResolvedValue({
+      id: 'conversion-1',
+      creativeId: 'creative-1',
+      kind: 'sale',
+      source: 'manual',
+      externalId: null,
+      revenueCents: 9900,
+      currency: 'usd',
+      occurredAt: new Date('2026-07-25T20:00:00.000Z'),
+    } as any)
   })
 
   it('requires authentication', async () => {

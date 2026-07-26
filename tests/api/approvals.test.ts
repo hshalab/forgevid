@@ -27,6 +27,8 @@ jest.mock('next/server', () => {
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
+jest.mock('@/lib/evidence-ledger', () => ({ appendEvidence: jest.fn() }))
+jest.mock('@/lib/approval-events', () => ({ recordApprovalEvent: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     adCreative: {

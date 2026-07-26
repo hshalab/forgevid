@@ -18,11 +18,17 @@ export async function GET() {
   });
   const campaignIds = [...new Set(creatives.map((creative) => creative.campaignId))];
   const videoIds = creatives.map((creative) => creative.videoId).filter((id): id is string => Boolean(id));
-  const [campaigns, videos] = await Promise.all([
+  const [campaigns, approvalEvents, videos] = await Promise.all([
     campaignIds.length
       ? prisma.adCampaign.findMany({
           where: { id: { in: campaignIds }, userId: session.user.id },
           select: { id: true, name: true, brief: true, platform: true },
+        })
+      : [],
+    creatives.length
+      ? prisma.campaignApprovalEvent.findMany({
+          where: { creativeId: { in: creatives.map((creative) => creative.id) } },
+          orderBy: { createdAt: 'desc' },
         })
       : [],
     videoIds.length
@@ -54,6 +60,17 @@ export async function GET() {
         recommendationReason: creative.recommendationReason,
         expectedResult: creative.expectedResult,
         estimatedCostCents: creative.estimatedCostCents,
+        history: approvalEvents
+          .filter((event) => event.creativeId === creative.id)
+          .map((event) => ({
+            id: event.id,
+            revision: event.revision,
+            action: event.action,
+            rightsConfirmed: event.rightsConfirmed,
+            note: event.note,
+            snapshotHash: event.snapshotHash,
+            createdAt: event.createdAt.toISOString(),
+          })),
         campaign: campaign ?? null,
         video: video
           ? { status: video.status, url: video.fileUrl ?? video.url, thumbnail: video.thumbnail }

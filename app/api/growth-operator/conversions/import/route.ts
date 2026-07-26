@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { splitCsvLine } from '@/lib/listing-brief'
+import { appendEvidence } from '@/lib/evidence-ledger'
 
 const rowSchema = z.object({
   creativeId: z.string().min(1),
@@ -67,6 +68,17 @@ export async function POST(request: NextRequest) {
       occurredAt: new Date(row.occurredAt),
     })),
     skipDuplicates: true,
+  })
+  await appendEvidence({
+    kind: 'conversion.csv_imported',
+    entityType: 'GrowthConversionImport',
+    actorUserId: session.user.id,
+    payload: {
+      submitted: rows.length,
+      imported: result.count,
+      skipped: rows.length - result.count,
+      externalIds: rows.map((row) => row.externalId),
+    },
   })
   return NextResponse.json({ imported: result.count, skipped: rows.length - result.count })
 }

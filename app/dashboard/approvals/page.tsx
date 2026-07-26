@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 
 interface ApprovalRow {
   id: string;
@@ -24,6 +25,15 @@ interface ApprovalRow {
   campaign?: { name: string; brief: string; platform: string } | null;
   video?: { status: string; url?: string | null; thumbnail?: string | null } | null;
   publicUrl?: string | null;
+  history?: Array<{
+    id: string;
+    revision: number;
+    action: string;
+    rightsConfirmed: boolean;
+    note?: string | null;
+    snapshotHash: string;
+    createdAt: string;
+  }>;
 }
 
 const FILTERS = ["AWAITING_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED", "ALL"];
@@ -36,6 +46,8 @@ export default function ApprovalsPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [rights, setRights] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [revisions, setRevisions] = useState<Record<string, { hook: string; cta: string }>>({});
 
   const load = async () => {
     setLoading(true);
@@ -84,6 +96,40 @@ export default function ApprovalsPage() {
     }
   };
 
+  const bulkApprove = async () => {
+    const ids = Object.keys(selected).filter((id) => selected[id]);
+    if (!ids.length || !window.confirm(`Approve ${ids.length} completed revisions and confirm you own or are authorized to use all selected content?`)) return;
+    setSaving("bulk");
+    const response = await fetch("/api/approvals/bulk", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, action: "approve", rightsConfirmed: true, note: "Bulk reviewed and approved by account owner." }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) setError(data.error || "Bulk approval failed.");
+    else { setSelected({}); await load(); }
+    setSaving(null);
+  };
+
+  const regenerate = async (row: ApprovalRow) => {
+    const revision = revisions[row.id];
+    if (!revision?.hook && !revision?.cta) return;
+    setSaving(row.id);
+    const response = await fetch(`/api/approvals/${row.id}/regenerate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hookNarration: revision.hook || undefined,
+        ctaNarration: revision.cta || undefined,
+        note: notes[row.id] || "Selective hook/CTA revision requested by owner.",
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) setError(data.error || "Selective regeneration failed.");
+    else await load();
+    setSaving(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -112,6 +158,11 @@ export default function ApprovalsPage() {
           </Button>
         ))}
       </div>
+      {Object.values(selected).some(Boolean) && (
+        <Button onClick={() => void bulkApprove()} disabled={saving === "bulk"}>
+          <CheckCircle2 className="h-4 w-4" /> Approve selected completed revisions
+        </Button>
+      )}
 
       {error && <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-red-300">{error}</div>}
       {loading ? (
@@ -129,7 +180,10 @@ export default function ApprovalsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <CardTitle>{row.campaign?.name || row.label}</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        <Checkbox checked={selected[row.id] || false} onCheckedChange={(checked) => setSelected((current) => ({ ...current, [row.id]: checked === true }))} />
+                        {row.campaign?.name || row.label}
+                      </CardTitle>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Revision {row.revision} · {row.aspect || "default"} · {row.campaign?.platform || "campaign"}
                       </p>
@@ -172,12 +226,39 @@ export default function ApprovalsPage() {
                     </div>
                   )}
 
+                  {row.history && row.history.length > 0 && (
+                    <details className="rounded-md border p-3 text-sm">
+                      <summary className="cursor-pointer font-medium">Immutable revision history ({row.history.length})</summary>
+                      <div className="mt-3 space-y-3">
+                        {row.history.map((event) => (
+                          <div key={event.id} className="border-l-2 pl-3">
+                            <p className="font-medium">Revision {event.revision} · {event.action.replaceAll("_", " ")}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(event.createdAt).toLocaleString()} · rights {event.rightsConfirmed ? "confirmed" : "not confirmed"}</p>
+                            {event.note && <p>{event.note}</p>}
+                            <p className="break-all font-mono text-[10px] text-muted-foreground">Snapshot SHA-256: {event.snapshotHash}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
                   <Textarea
                     value={notes[row.id] || ""}
                     onChange={(event) => setNotes((current) => ({ ...current, [row.id]: event.target.value }))}
                     placeholder="Review note or requested revision…"
                     rows={3}
                   />
+
+                  <details className="rounded-md border p-3 text-sm">
+                    <summary className="cursor-pointer font-medium">Regenerate only the hook or CTA</summary>
+                    <div className="mt-3 space-y-3">
+                      <Input placeholder="Replacement opening narration" value={revisions[row.id]?.hook || ""} onChange={(event) => setRevisions((current) => ({ ...current, [row.id]: { hook: event.target.value, cta: current[row.id]?.cta || "" } }))} />
+                      <Input placeholder="Replacement closing narration" value={revisions[row.id]?.cta || ""} onChange={(event) => setRevisions((current) => ({ ...current, [row.id]: { hook: current[row.id]?.hook || "", cta: event.target.value } }))} />
+                      <Button variant="outline" disabled={working || (!revisions[row.id]?.hook && !revisions[row.id]?.cta)} onClick={() => void regenerate(row)}>
+                        <RefreshCcw className="h-4 w-4" /> Create new selective revision
+                      </Button>
+                    </div>
+                  </details>
 
                   {row.approvalStatus !== "APPROVED" && (
                     <label className="flex items-start gap-2 rounded-md border p-3 text-sm">

@@ -3,6 +3,7 @@ import type { Opportunity } from '@/lib/inventory'
 import { buildGrowthDecisionPrompt, parseGrowthDecision } from '@/lib/growth-decision'
 import { evidenceLabel } from '@/lib/growth-experiments'
 import { llm, llmModel } from '@/lib/ai/llm'
+import { appendEvidence } from '@/lib/evidence-ledger'
 
 export async function runGrowthDecision(userId: string, opportunity: Opportunity) {
   const prior = await prisma.aIGeneration.findMany({
@@ -68,6 +69,13 @@ export async function runGrowthDecision(userId: string, opportunity: Opportunity
     await prisma.aIGeneration.update({
       where: { id: audit.id },
       data: { result: JSON.stringify(decision), status: 'COMPLETED', tokensUsed: completion.usage?.total_tokens ?? 0 },
+    })
+    await appendEvidence({
+      kind: 'growth_decision.completed',
+      entityType: 'AIGeneration',
+      entityId: audit.id,
+      actorUserId: userId,
+      payload: { opportunityId: opportunity.itemId, decision, provider: 'gemini', model: llmModel('standard') },
     })
     return { decision, auditId: audit.id, model: llmModel('standard') }
   } catch (error) {
