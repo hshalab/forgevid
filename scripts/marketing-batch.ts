@@ -1701,16 +1701,16 @@ const NEUROHIRES_TOPICS: MarketingTopic[] = [
 // offer, so its own line makes none.
 const BRAND_FOOTERS: Record<string, Record<Lang, string>> = {
   forgevid: {
-    en: 'Try it free — 2 videos a month at ForgeVid.com.\nAlso from us: RingYield.com (AI receptionist for service shops) and NeuroHires.com (free resume tools).',
-    es: 'Pruébalo gratis — 2 videos al mes en ForgeVid.com.\nTambién de nosotros: RingYield.com (recepcionista IA para talleres) y NeuroHires.com (herramientas de currículum gratis).',
+    en: 'ForgeVid turns your website, inventory or products into ready-to-post videos in minutes — no camera, no editor, English AND Spanish. Try it free: 2 videos a month at ForgeVid.com.\nAlso from us: RingYield.com — answers the business calls you miss, in English and Spanish · NeuroHires.com — free resume tools + AI hiring.',
+    es: 'ForgeVid convierte tu sitio web, inventario o productos en videos listos para publicar en minutos — sin cámara, sin editor, en inglés Y español. Pruébalo gratis: 2 videos al mes en ForgeVid.com.\nTambién de nosotros: RingYield.com — contesta las llamadas que tu negocio pierde, en inglés y español · NeuroHires.com — herramientas de currículum gratis + IA para contratar.',
   },
   ringyield: {
-    en: 'See it at RingYield.com.\nAlso from us: ForgeVid.com (2 free videos/month) and NeuroHires.com (free resume tools).',
-    es: 'Conócelo en RingYield.com.\nTambién de nosotros: ForgeVid.com (2 videos gratis al mes) y NeuroHires.com (herramientas de currículum gratis).',
+    en: 'RingYield answers the calls your business misses — day or night, in English and Spanish — takes the details and books the job for you. See it at RingYield.com.\nAlso from us: ForgeVid.com — your products turned into marketing videos in minutes (2 free/month) · NeuroHires.com — free resume tools + AI hiring.',
+    es: 'RingYield contesta las llamadas que tu negocio pierde — de día o de noche, en inglés y español — toma los datos y agenda el trabajo por ti. Conócelo en RingYield.com.\nTambién de nosotros: ForgeVid.com — tus productos convertidos en videos de marketing en minutos (2 gratis al mes) · NeuroHires.com — herramientas de currículum gratis + IA para contratar.',
   },
   neurohires: {
-    en: 'Free resume tools at NeuroHires.com.\nAlso from us: ForgeVid.com (2 free videos/month) and RingYield.com (AI receptionist for service shops).',
-    es: 'Herramientas de currículum gratis en NeuroHires.com.\nTambién de nosotros: ForgeVid.com (2 videos gratis al mes) y RingYield.com (recepcionista IA para talleres).',
+    en: 'NeuroHires — AI for both sides of hiring: free resume tools that show you what recruiters\' software sees, and faster candidate shortlists for employers. NeuroHires.com.\nAlso from us: ForgeVid.com — your products turned into marketing videos in minutes (2 free/month) · RingYield.com — answers the business calls you miss, in English and Spanish.',
+    es: 'NeuroHires — IA para los dos lados de la contratación: herramientas gratis que te muestran lo que ve el software de los reclutadores, y listas de candidatos más rápidas para empresas. NeuroHires.com.\nTambién de nosotros: ForgeVid.com — tus productos convertidos en videos de marketing en minutos (2 gratis al mes) · RingYield.com — contesta las llamadas que tu negocio pierde, en inglés y español.',
   },
 };
 
