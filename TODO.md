@@ -1031,3 +1031,48 @@ status matrix to `evidence/GROWTH-OPERATOR-IMPLEMENTATION-AUDIT.md`.
 
 Added regression coverage for tenant isolation, rights confirmation, render
 completion, revision invalidation, structured Gemini output and item binding.
+
+## 2026-07-25 (cont'd) — cron wiring live, two infra problems found on the way
+
+Asked to "configure Railway to call /api/cron/inventory-sources with
+CRON_SECRET" (the concurrent session's external-setup note). Done, but the
+straightforward version was impossible twice over:
+
+- **The endpoint was unreachable by any scheduler.** verifyCsrf 403s every
+  POST without the browser double-submit pair, and /api/cron/ wasn't
+  exempt — confirmed live (403 'CSRF token missing' WITH the correct
+  Bearer secret) before changing anything. Added /api/cron/ to the same
+  exemption list as /api/webhooks/ (a cron caller has no browser session;
+  the Bearer CRON_SECRET the route already enforces is the right control).
+  Re-verified live after deploy: 200 with the secret, 401 with a wrong or
+  missing one.
+- **Scheduler choice:** GitHub Actions hourly workflow
+  (.github/workflows/inventory-cron.yml, CRON_SECRET set as an Actions
+  secret, piped never echoed — public repo) instead of a Railway cron
+  service, which would need a whole separate service to run one curl. The
+  endpoint decides what's due (nextRunAt + cadence, atomic claim), so
+  hourly polling is a cheap no-op most runs and double-firing is harmless.
+- **Found: the GitHub org's account is LOCKED for billing** — no Actions
+  job starts at all ("account is locked due to a billing issue"), which
+  also means the repo's existing CI workflows have not been running on any
+  push. Founder-side fix (GitHub → Settings → Billing). Until then, a
+  Windows scheduled task ("ForgeVid Inventory Cron", hourly, same pattern
+  as ForgeVid Daily Marketing) runs scripts/inventory-cron.cmd — secret
+  read from gitignored .env.local, never in the committed script. Verified:
+  manual run logged HTTP 200. When Actions is unblocked the workflow takes
+  over and the task can be deleted.
+- **Found and fixed: the repo's default branch was `master`** — the frozen
+  October 2025 pre-hackathon snapshot. Scheduled workflows only fire from
+  the default branch, and worse, anyone browsing the public repo (judges
+  included) landed on the ancient non-compiling scaffold instead of the
+  real product. Switched default to `main` — metadata only; master itself
+  is untouched and still at 205e2236, the exact commit the eligibility
+  disclosure cites as preserved.
+
+**Customer custom domains (the other external-setup note):** nothing to
+automate — publishing the TXT record is the customer's action and
+attaching their hostname to the Railway service is a per-customer manual
+step in the Railway dashboard when one actually signs up.
+
+Merged-state verification after the concurrent session's 6 commits:
+tsc clean, 238/238 tests across 42 suites, full npm run build succeeds.
