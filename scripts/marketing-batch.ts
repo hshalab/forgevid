@@ -536,6 +536,254 @@ const FORGEVID_TOPICS: MarketingTopic[] = [
       },
     ],
   },
+  // ── Value-first topics (hook -> problem -> do-it-now tips -> soft CTA) —
+  // same system as the NeuroHires candidate-side hooks. These give the viewer
+  // something useful even if they never buy; claims stay qualitative.
+  {
+    slug: 'first-two-seconds',
+    post: {
+      en: {
+        caption:
+          'People decide in the first 2 seconds whether to keep watching your product video. Put these 3 things there — nothing else.',
+        hashtags: '#videomarketing #smallbusiness #contentmarketing #reels #marketingtips',
+      },
+      es: {
+        caption:
+          'La gente decide en los primeros 2 segundos si sigue viendo tu video. Pon estas 3 cosas ahí — nada más.',
+        hashtags: '#videomarketing #negocios #marketingdigital #reels #emprendedores',
+      },
+    },
+    scenes: [
+      {
+        query: 'person scrolling phone fast',
+        keywords: ['thumb scrolling phone', 'social media feed'],
+        narration: {
+          en: 'Nobody watches second three of a boring video. The first two seconds decide everything.',
+          es: 'Nadie llega al segundo tres de un video aburrido. Los primeros dos segundos lo deciden todo.',
+        },
+      },
+      {
+        query: 'product closeup camera motion',
+        keywords: ['product video shot', 'camera closeup object'],
+        narration: {
+          en: 'Open with three things: the product moving, the price on screen, and one line that names who it is for.',
+          es: 'Abre con tres cosas: el producto en movimiento, el precio en pantalla, y una frase que diga para quién es.',
+        },
+      },
+      {
+        query: 'phone captions video subtitles',
+        keywords: ['phone video captions', 'watching video muted'],
+        narration: {
+          en: 'And captions always — most people watch with the sound off.',
+          es: 'Y subtítulos siempre — la mayoría mira sin sonido.',
+        },
+      },
+      {
+        query: 'laptop video editing screen',
+        keywords: ['video editor screen', 'creating content laptop'],
+        narration: {
+          en: 'ForgeVid builds all of that in automatically. ForgeVid dot com.',
+          es: 'ForgeVid lo integra todo automáticamente. ForgeVid punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'daily-beats-perfect',
+    post: {
+      en: {
+        caption:
+          'You do not need one $500 video. You need thirty good-enough videos a month. On social, consistency beats production value.',
+        hashtags: '#contentmarketing #smallbusiness #videomarketing #socialmediatips #marketing',
+      },
+      es: {
+        caption:
+          'No necesitas un video de $500. Necesitas treinta videos decentes al mes. En redes, la constancia gana a la producción.',
+        hashtags: '#marketingdigital #negocios #videomarketing #redessociales #emprendedores',
+      },
+    },
+    scenes: [
+      {
+        query: 'expensive camera film set',
+        keywords: ['professional camera crew', 'film production set'],
+        narration: {
+          en: 'One polished video a month is not a content strategy. The feed forgets you in two days.',
+          es: 'Un video pulido al mes no es una estrategia. El algoritmo te olvida en dos días.',
+        },
+      },
+      {
+        query: 'calendar planning schedule',
+        keywords: ['monthly calendar desk', 'planning schedule'],
+        narration: {
+          en: 'Accounts that grow post most days. Good enough, published, beats perfect, pending.',
+          es: 'Las cuentas que crecen publican casi a diario. Algo decente publicado gana a algo perfecto pendiente.',
+        },
+      },
+      {
+        query: 'person recording phone product',
+        keywords: ['filming with phone', 'small business owner phone'],
+        narration: {
+          en: 'The fix is volume without burnout: make your catalog, your inventory, your listings do the talking.',
+          es: 'La solución es volumen sin agotarte: deja que tu catálogo, tu inventario, tus productos hablen por ti.',
+        },
+      },
+      {
+        query: 'laptop video editing screen',
+        keywords: ['batch video files', 'content library screen'],
+        narration: {
+          en: 'ForgeVid turns what you already sell into daily videos. ForgeVid dot com.',
+          es: 'ForgeVid convierte lo que ya vendes en videos diarios. ForgeVid punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'post-in-spanish',
+    post: {
+      en: {
+        caption:
+          'Your competitors post in English only. Posting the SAME content in Spanish too is the cheapest audience expansion available to a US business.',
+        hashtags: '#marketing #smallbusiness #latinomarket #bilingual #growthtips',
+      },
+      es: {
+        caption:
+          'Tu competencia publica solo en inglés. Publicar lo MISMO también en español es la expansión de audiencia más barata que existe en EE.UU.',
+        hashtags: '#marketing #negocios #mercadolatino #bilingue #crecimiento',
+      },
+    },
+    scenes: [
+      {
+        query: 'busy street diverse people',
+        keywords: ['crowded city street', 'diverse shoppers'],
+        narration: {
+          en: 'Millions of US customers prefer Spanish — and most businesses never post a single word of it.',
+          es: 'Millones de clientes en EE.UU. prefieren español — y la mayoría de los negocios nunca publica ni una palabra en él.',
+        },
+      },
+      {
+        query: 'two phones side by side',
+        keywords: ['two smartphones screens', 'comparing phones'],
+        narration: {
+          en: 'The move: every video twice. Same product, English cut and Spanish cut, posted to each audience.',
+          es: 'La jugada: cada video dos veces. El mismo producto, versión en inglés y versión en español, para cada audiencia.',
+        },
+      },
+      {
+        query: 'person recording phone product',
+        keywords: ['content creator phone', 'recording video'],
+        narration: {
+          en: 'Less competition in the Spanish feed means cheaper attention for the exact same offer.',
+          es: 'Menos competencia en el feed en español significa atención más barata para exactamente la misma oferta.',
+        },
+      },
+      {
+        query: 'laptop video editing screen',
+        keywords: ['language selection screen', 'video software laptop'],
+        narration: {
+          en: 'ForgeVid renders both languages from one click. ForgeVid dot com.',
+          es: 'ForgeVid genera ambos idiomas con un clic. ForgeVid punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'photos-vs-video',
+    post: {
+      en: {
+        caption:
+          'Your product is not the problem. Your photos are. Feeds are video-first now — still images get skipped.',
+        hashtags: '#videomarketing #ecommerce #smallbusiness #reels #sales',
+      },
+      es: {
+        caption:
+          'Tu producto no es el problema. Tus fotos sí. Las redes ahora son de video — las imágenes fijas se ignoran.',
+        hashtags: '#videomarketing #ecommerce #negocios #reels #ventas',
+      },
+    },
+    scenes: [
+      {
+        query: 'person scrolling phone fast',
+        keywords: ['scrolling past posts', 'phone feed fast'],
+        narration: {
+          en: 'Watch anyone scroll: photos fly past, video makes the thumb stop.',
+          es: 'Mira a cualquiera con su teléfono: las fotos pasan volando, el video detiene el dedo.',
+        },
+      },
+      {
+        query: 'product closeup camera motion',
+        keywords: ['rotating product shot', 'object in motion'],
+        narration: {
+          en: 'Platforms push video harder, and motion earns the pause — the same product gets a second look.',
+          es: 'Las plataformas impulsan más el video, y el movimiento gana la pausa — el mismo producto recibe una segunda mirada.',
+        },
+      },
+      {
+        query: 'person recording phone product',
+        keywords: ['photographing product', 'small business inventory'],
+        narration: {
+          en: 'You already have the photos. Turning them into video is the shortest upgrade in marketing.',
+          es: 'Ya tienes las fotos. Convertirlas en video es la mejora más corta del marketing.',
+        },
+      },
+      {
+        query: 'laptop video editing screen',
+        keywords: ['photo to video software', 'editing screen'],
+        narration: {
+          en: 'ForgeVid does exactly that, from your photos. ForgeVid dot com.',
+          es: 'ForgeVid hace exactamente eso, con tus fotos. ForgeVid punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'refresh-before-discount',
+    post: {
+      en: {
+        caption:
+          'That listing sitting for 30 days does not need a price cut yet. It needs new content first. Discount is the LAST lever, not the first.',
+        hashtags: '#sales #cardealer #realestate #ecommerce #marketingtips',
+      },
+      es: {
+        caption:
+          'Ese anuncio con 30 días sin moverse no necesita bajar el precio todavía. Necesita contenido nuevo primero. El descuento es la ÚLTIMA palanca.',
+        hashtags: '#ventas #autos #bienesraices #ecommerce #marketing',
+      },
+    },
+    scenes: [
+      {
+        query: 'car lot sale sign',
+        keywords: ['for sale sign', 'discount tag store'],
+        narration: {
+          en: 'Something is not selling, so you cut the price. Stop — that is the last move, not the first.',
+          es: 'Algo no se vende, y bajas el precio. Espera — esa es la última jugada, no la primera.',
+        },
+      },
+      {
+        query: 'person recording phone product',
+        keywords: ['new photos product', 'fresh content phone'],
+        narration: {
+          en: 'First give it a new video: new angle, new hook, new post. Most stale listings were never really SEEN.',
+          es: 'Primero dale un video nuevo: otro ángulo, otro gancho, otra publicación. La mayoría de anuncios viejos nunca fueron realmente VISTOS.',
+        },
+      },
+      {
+        query: 'phone notification message',
+        keywords: ['phone message alert', 'incoming inquiry'],
+        narration: {
+          en: 'Fresh content restarts the clock with the algorithm — and with buyers who scrolled past it three weeks ago.',
+          es: 'El contenido nuevo reinicia el reloj con el algoritmo — y con los compradores que lo ignoraron hace tres semanas.',
+        },
+      },
+      {
+        query: 'laptop video editing screen',
+        keywords: ['video creation screen', 'marketing dashboard'],
+        narration: {
+          en: 'New video in minutes, margin intact. ForgeVid dot com.',
+          es: 'Video nuevo en minutos, margen intacto. ForgeVid punto com.',
+        },
+      },
+    ],
+  },
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -736,6 +984,254 @@ const RINGYIELD_TOPICS: MarketingTopic[] = [
         narration: {
           en: 'Your phones, handled. RingYield dot com.',
           es: 'Tus llamadas, resueltas. RingYield punto com.',
+        },
+      },
+    ],
+  },
+  // ── Value-first topics (hook -> problem -> do-it-now tips -> soft CTA) —
+  // same system as the NeuroHires candidate-side hooks. Useful to the viewer
+  // even if they never buy; claims stay qualitative.
+  {
+    slug: 'speed-to-lead',
+    post: {
+      en: {
+        caption:
+          'The first business to answer usually wins the job. Not the best one — the first one. Here is how to always be first.',
+        hashtags: '#smallbusiness #hvac #contractors #leads #servicebusiness',
+      },
+      es: {
+        caption:
+          'El primer negocio que contesta suele ganar el trabajo. No el mejor — el primero. Así puedes ser siempre el primero.',
+        hashtags: '#negocios #servicios #contratistas #clientes #emprendedores',
+      },
+    },
+    scenes: [
+      {
+        query: 'person calling phone waiting',
+        keywords: ['customer on phone', 'person dialing'],
+        narration: {
+          en: 'A customer with a broken AC calls three companies. The job usually goes to whoever answers first.',
+          es: 'Un cliente con el aire dañado llama a tres empresas. El trabajo suele ganarlo quien contesta primero.',
+        },
+      },
+      {
+        query: 'technician working busy',
+        keywords: ['busy repair work', 'hands tools work'],
+        narration: {
+          en: 'You are not slow on purpose — you are on a roof, under a sink, driving. Physics is the problem.',
+          es: 'No contestas tarde a propósito — estás en un techo, bajo un fregadero, manejando. El problema es la física.',
+        },
+      },
+      {
+        query: 'phone answering call office',
+        keywords: ['answering phone desk', 'call center friendly'],
+        narration: {
+          en: 'So make the answer instant even when you are not: every call picked up, every caller booked or triaged on the spot.',
+          es: 'Haz que la respuesta sea instantánea aunque tú no puedas: cada llamada contestada, cada cliente agendado al momento.',
+        },
+      },
+      {
+        query: 'technician smiling',
+        keywords: ['happy contractor', 'service professional'],
+        narration: {
+          en: 'RingYield answers in one ring, every time. RingYield dot com.',
+          es: 'RingYield contesta al primer timbre, siempre. RingYield punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'voicemail-myth',
+    post: {
+      en: {
+        caption:
+          'Voicemail is not answering. A caller with an urgent job does not leave a message — they call the next number on the list.',
+        hashtags: '#smallbusiness #servicebusiness #hvac #plumbing #missedcalls',
+      },
+      es: {
+        caption:
+          'El buzón de voz no es contestar. Un cliente con urgencia no deja mensaje — llama al siguiente número de la lista.',
+        hashtags: '#negocios #servicios #plomeria #clientes #llamadasperdidas',
+      },
+    },
+    scenes: [
+      {
+        query: 'phone voicemail screen',
+        keywords: ['voicemail phone screen', 'missed call notification'],
+        narration: {
+          en: 'You think voicemail catches what you miss. For urgent jobs, it mostly catches silence.',
+          es: 'Crees que el buzón de voz atrapa lo que pierdes. En urgencias, casi siempre atrapa silencio.',
+        },
+      },
+      {
+        query: 'person hanging up phone frustrated',
+        keywords: ['frustrated caller', 'person phone annoyed'],
+        narration: {
+          en: 'A flooded kitchen does not wait for a callback. The caller hangs up and dials your competitor.',
+          es: 'Una cocina inundada no espera una devolución de llamada. El cliente cuelga y marca a tu competencia.',
+        },
+      },
+      {
+        query: 'phone answering call office',
+        keywords: ['friendly phone answer', 'receptionist speaking'],
+        narration: {
+          en: 'A real answer — a voice that takes the name, the address, the problem — is what keeps the job yours.',
+          es: 'Una respuesta real — una voz que toma el nombre, la dirección, el problema — es lo que mantiene el trabajo contigo.',
+        },
+      },
+      {
+        query: 'technician smiling',
+        keywords: ['booked job service', 'happy worker van'],
+        narration: {
+          en: 'Retire the voicemail. RingYield dot com.',
+          es: 'Jubila el buzón de voz. RingYield punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'spanish-callers',
+    post: {
+      en: {
+        caption:
+          'Does your business phone speak Spanish? For many shops, a big share of callers prefer it — and hang up when it is not offered.',
+        hashtags: '#smallbusiness #bilingual #latinomarket #servicebusiness #customerservice',
+      },
+      es: {
+        caption:
+          '¿Tu teléfono de negocio habla español? En muchos talleres, gran parte de los clientes lo prefieren — y cuelgan cuando no lo hay.',
+        hashtags: '#negocios #bilingue #mercadolatino #servicios #atencionalcliente',
+      },
+    },
+    scenes: [
+      {
+        query: 'person calling phone waiting',
+        keywords: ['customer phone call', 'person speaking phone'],
+        narration: {
+          en: 'A caller starts in Spanish. The line goes awkward. They apologize — and hang up.',
+          es: 'Un cliente empieza en español. La llamada se vuelve incómoda. Pide disculpas — y cuelga.',
+        },
+      },
+      {
+        query: 'busy street diverse people',
+        keywords: ['neighborhood street shops', 'local community'],
+        narration: {
+          en: 'In many service areas that is a big share of the market, lost before you ever heard the job.',
+          es: 'En muchas zonas eso es gran parte del mercado, perdido antes de siquiera escuchar el trabajo.',
+        },
+      },
+      {
+        query: 'phone answering call office',
+        keywords: ['bilingual phone service', 'call answered friendly'],
+        narration: {
+          en: 'Answer every caller in THEIR language — English or Spanish, same line, no transfers.',
+          es: 'Contesta a cada cliente en SU idioma — inglés o español, la misma línea, sin transferencias.',
+        },
+      },
+      {
+        query: 'technician smiling',
+        keywords: ['happy customer handshake', 'service done'],
+        narration: {
+          en: 'RingYield answers in both, automatically. RingYield dot com.',
+          es: 'RingYield contesta en ambos, automáticamente. RingYield punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'three-questions',
+    post: {
+      en: {
+        caption:
+          'Whoever answers your phone must capture 3 things on EVERY call. Miss one and the callback dies. Steal this checklist.',
+        hashtags: '#smallbusiness #servicebusiness #sales #customerservice #contractors',
+      },
+      es: {
+        caption:
+          'Quien conteste tu teléfono debe capturar 3 cosas en CADA llamada. Falta una y la venta muere. Cópiate esta lista.',
+        hashtags: '#negocios #servicios #ventas #atencionalcliente #contratistas',
+      },
+    },
+    scenes: [
+      {
+        query: 'sticky note phone desk',
+        keywords: ['notes by phone', 'checklist desk'],
+        narration: {
+          en: 'Three things, every call. One: name and callback number — confirmed, not assumed.',
+          es: 'Tres cosas, en cada llamada. Uno: nombre y número de contacto — confirmados, no supuestos.',
+        },
+      },
+      {
+        query: 'person writing notes planning',
+        keywords: ['taking notes call', 'writing details'],
+        narration: {
+          en: 'Two: the actual problem, in their words. Three: when they need it — today, this week, whenever.',
+          es: 'Dos: el problema real, en sus palabras. Tres: para cuándo lo necesitan — hoy, esta semana, cuando sea.',
+        },
+      },
+      {
+        query: 'phone answering call office',
+        keywords: ['professional call handling', 'phone conversation'],
+        narration: {
+          en: 'With those three, any callback closes. Without them, you are cold-calling your own lead.',
+          es: 'Con esas tres, cualquier devolución cierra. Sin ellas, estás llamando en frío a tu propio cliente.',
+        },
+      },
+      {
+        query: 'technician smiling',
+        keywords: ['organized business owner', 'service van ready'],
+        narration: {
+          en: 'RingYield captures all three on every single call. RingYield dot com.',
+          es: 'RingYield captura las tres en cada llamada. RingYield punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'busy-paradox',
+    post: {
+      en: {
+        caption:
+          'You do not miss calls because business is slow. You miss them because you are busy working. The busier you get, the more you lose.',
+        hashtags: '#smallbusiness #contractors #hvac #growth #servicebusiness',
+      },
+      es: {
+        caption:
+          'No pierdes llamadas porque el negocio esté lento. Las pierdes porque estás trabajando. Cuanto más ocupado, más pierdes.',
+        hashtags: '#negocios #contratistas #servicios #crecimiento #emprendedores',
+      },
+    },
+    scenes: [
+      {
+        query: 'technician working busy',
+        keywords: ['worker under sink', 'repair in progress'],
+        narration: {
+          en: 'Here is the trap: the weeks you are slammed with work are exactly the weeks you miss the most calls.',
+          es: 'Esta es la trampa: las semanas más llenas de trabajo son justo las semanas en que más llamadas pierdes.',
+        },
+      },
+      {
+        query: 'phone ringing unanswered',
+        keywords: ['ringing phone table', 'missed call screen'],
+        narration: {
+          en: 'So your best months quietly cap themselves — the pipeline starves while you are busy delivering.',
+          es: 'Así tus mejores meses se frenan solos — el flujo de clientes se seca mientras tú estás entregando.',
+        },
+      },
+      {
+        query: 'phone answering call office',
+        keywords: ['call answered professional', 'booking appointment'],
+        narration: {
+          en: 'Break the ceiling: let every call get answered and booked while your hands stay on the job.',
+          es: 'Rompe el techo: deja que cada llamada se conteste y agende mientras tus manos siguen en el trabajo.',
+        },
+      },
+      {
+        query: 'technician smiling',
+        keywords: ['successful contractor', 'growing business'],
+        narration: {
+          en: 'Busy should mean growing. RingYield dot com.',
+          es: 'Ocupado debería significar crecer. RingYield punto com.',
         },
       },
     ],
