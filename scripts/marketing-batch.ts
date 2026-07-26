@@ -943,6 +943,255 @@ const NEUROHIRES_TOPICS: MarketingTopic[] = [
       },
     ],
   },
+  // ── Candidate-side topics (job seekers, not employers) — hooks adapted from
+  // the 2026-07 TikTok strategy. Claims deliberately qualitative: no invented
+  // statistics, and the CTA points at the ATS tool that actually exists at
+  // neurohires.com/en/tools (verified live 2026-07-26).
+  {
+    slug: 'ats-filter',
+    post: {
+      en: {
+        caption:
+          'Your resume is not getting rejected by people. At many companies, software filters it before a human ever opens it. Score yours at NeuroHires.com.',
+        hashtags: '#resume #jobsearch #ATS #careertips #jobhunt',
+      },
+      es: {
+        caption:
+          'Tu currículum no lo rechaza una persona. En muchas empresas, un software lo filtra antes de que un humano lo abra. Evalúa el tuyo en NeuroHires.com.',
+        hashtags: '#curriculum #empleo #trabajo #consejoslaborales #busquedadeempleo',
+      },
+    },
+    scenes: [
+      {
+        query: 'person laptop rejection sad',
+        keywords: ['job application computer', 'frustrated laptop user'],
+        narration: {
+          en: 'Your resume is not getting rejected by people. At many companies, software filters it before a human ever opens it.',
+          es: 'Tu currículum no lo rechaza una persona. En muchas empresas, un software lo filtra antes de que un humano lo abra.',
+        },
+      },
+      {
+        query: 'software screen scanning document',
+        keywords: ['document scan screen', 'data processing computer'],
+        narration: {
+          en: 'These systems rank applications by how well they match the job description — and recruiters mostly look at the top of that list.',
+          es: 'Esos sistemas clasifican las solicitudes según qué tanto coinciden con la vacante — y los reclutadores miran sobre todo la parte alta de esa lista.',
+        },
+      },
+      {
+        query: 'person editing document laptop',
+        keywords: ['writing resume laptop', 'editing text screen'],
+        narration: {
+          en: 'So use the words the job posting uses, keep the format simple, and lead with what matches.',
+          es: 'Así que usa las palabras del anuncio, mantén un formato simple y destaca primero lo que coincide.',
+        },
+      },
+      {
+        query: 'confident person phone smile',
+        keywords: ['happy person phone', 'smiling professional'],
+        narration: {
+          en: 'See how your resume scores before you apply. NeuroHires dot com.',
+          es: 'Mira cómo puntúa tu currículum antes de aplicar. NeuroHires punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'ats-myth',
+    post: {
+      en: {
+        caption:
+          '"75% of resumes are auto-rejected by AI" — that stat is basically made up. Here is what is actually true, and why it still matters.',
+        hashtags: '#resume #ATS #jobsearch #mythbusting #careeradvice',
+      },
+      es: {
+        caption:
+          '"El 75% de los currículums los rechaza una IA" — ese dato es básicamente inventado. Esto es lo que sí es cierto, y por qué igual importa.',
+        hashtags: '#curriculum #empleo #mitos #consejoslaborales #trabajo',
+      },
+    },
+    scenes: [
+      {
+        query: 'fake news warning screen',
+        keywords: ['warning sign screen', 'person skeptical phone'],
+        narration: {
+          en: 'You have seen the claim: seventy-five percent of resumes get auto-rejected by AI. Nobody can actually back that number up.',
+          es: 'Seguro viste el dato: el setenta y cinco por ciento de los currículums los rechaza una IA. Nadie puede realmente respaldar ese número.',
+        },
+      },
+      {
+        query: 'office computer recruiter working',
+        keywords: ['recruiter screen office', 'HR software'],
+        narration: {
+          en: 'What IS true: many companies use software to rank applications, and humans mostly read the ones ranked highest.',
+          es: 'Lo que SÍ es cierto: muchas empresas usan software para clasificar solicitudes, y los humanos leen sobre todo las mejor clasificadas.',
+        },
+      },
+      {
+        query: 'person typing laptop focus',
+        keywords: ['focused typing', 'laptop close up hands'],
+        narration: {
+          en: 'You do not need to fear a robot. You need to rank higher — clear titles, matching skills, simple formatting.',
+          es: 'No tienes que temerle a un robot. Tienes que clasificar más alto — títulos claros, habilidades que coincidan, formato simple.',
+        },
+      },
+      {
+        query: 'confident person phone smile',
+        keywords: ['satisfied professional', 'person smiling laptop'],
+        narration: {
+          en: 'Check where you stand at NeuroHires dot com.',
+          es: 'Mira dónde estás parado en NeuroHires punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'apply-smarter',
+    post: {
+      en: {
+        caption:
+          'Stop applying to 100 jobs with the same resume. 10 tailored applications beat 100 generic ones — here is the move.',
+        hashtags: '#jobsearch #careertips #resume #jobhunt #interviews',
+      },
+      es: {
+        caption:
+          'Deja de aplicar a 100 empleos con el mismo currículum. 10 solicitudes personalizadas ganan a 100 genéricas — este es el método.',
+        hashtags: '#empleo #trabajo #curriculum #consejoslaborales #entrevistas',
+      },
+    },
+    scenes: [
+      {
+        query: 'person tired laptop night',
+        keywords: ['exhausted computer user', 'late night laptop'],
+        narration: {
+          en: 'A hundred applications, three replies. The problem is not your effort — it is the shotgun approach.',
+          es: 'Cien solicitudes, tres respuestas. El problema no es tu esfuerzo — es aplicar a todo sin apuntar.',
+        },
+      },
+      {
+        query: 'person writing notes planning',
+        keywords: ['planning notebook desk', 'making list'],
+        narration: {
+          en: 'Pick ten roles you actually match. Rewrite your top three bullet points for each one, using the words from that posting.',
+          es: 'Elige diez puestos donde realmente encajas. Reescribe tus tres primeros logros para cada uno, con las palabras de ese anuncio.',
+        },
+      },
+      {
+        query: 'email notification phone',
+        keywords: ['phone notification', 'checking messages'],
+        narration: {
+          en: 'Tailored resumes rank higher in the software AND read better to the human — that is where callbacks come from.',
+          es: 'Un currículum personalizado clasifica más alto en el software Y convence más al humano — de ahí salen las llamadas.',
+        },
+      },
+      {
+        query: 'confident person phone smile',
+        keywords: ['happy candidate', 'good news phone'],
+        narration: {
+          en: 'Test each version before you send it. NeuroHires dot com.',
+          es: 'Prueba cada versión antes de enviarla. NeuroHires punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'interview-one-thing',
+    post: {
+      en: {
+        caption:
+          'Strong candidates rarely bomb interviews because of nerves. It is usually this one thing — and it is fixable tonight.',
+        hashtags: '#interviews #interviewtips #jobsearch #careeradvice #hiring',
+      },
+      es: {
+        caption:
+          'Los buenos candidatos casi nunca fallan la entrevista por nervios. Suele ser esta única cosa — y se arregla esta noche.',
+        hashtags: '#entrevistas #empleo #trabajo #consejoslaborales #contratacion',
+      },
+    },
+    scenes: [
+      {
+        query: 'nervous person interview waiting',
+        keywords: ['waiting room interview', 'nervous professional'],
+        narration: {
+          en: 'Strong candidates usually do not bomb interviews because of nerves. They bomb because they answer in generalities.',
+          es: 'Los buenos candidatos no suelen fallar por nervios. Fallan porque responden con generalidades.',
+        },
+      },
+      {
+        query: 'job interview conversation office',
+        keywords: ['interview meeting two people', 'office conversation'],
+        narration: {
+          en: '"I am a team player" convinces nobody. A specific story — the problem, what YOU did, the result — is what interviewers remember.',
+          es: '"Trabajo bien en equipo" no convence a nadie. Una historia concreta — el problema, lo que TÚ hiciste, el resultado — es lo que se recuerda.',
+        },
+      },
+      {
+        query: 'person writing notes planning',
+        keywords: ['preparing notes', 'writing notebook'],
+        narration: {
+          en: 'Tonight: write down five specific stories from your work. One per common question. That is the whole fix.',
+          es: 'Esta noche: escribe cinco historias concretas de tu trabajo. Una por pregunta típica. Ese es todo el arreglo.',
+        },
+      },
+      {
+        query: 'job interview handshake',
+        keywords: ['successful interview', 'handshake office'],
+        narration: {
+          en: 'Walk in with stories, not adjectives. More at NeuroHires dot com.',
+          es: 'Llega con historias, no con adjetivos. Más en NeuroHires punto com.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'resume-first-three',
+    post: {
+      en: {
+        caption:
+          'Recruiters decide in seconds. These are the three things they look at first on your resume — fix these before anything else.',
+        hashtags: '#resume #careertips #jobsearch #recruiting #jobhunt',
+      },
+      es: {
+        caption:
+          'Los reclutadores deciden en segundos. Estas son las tres cosas que miran primero en tu currículum — arregla esto antes que nada.',
+        hashtags: '#curriculum #empleo #consejoslaborales #reclutamiento #trabajo',
+      },
+    },
+    scenes: [
+      {
+        query: 'recruiter reading resume office',
+        keywords: ['reading document office', 'reviewing papers'],
+        narration: {
+          en: 'Recruiters skim before they read. Three things get looked at first — get these right and the rest gets read.',
+          es: 'Los reclutadores hojean antes de leer. Tres cosas se miran primero — acierta en ellas y leerán el resto.',
+        },
+      },
+      {
+        query: 'resume document closeup',
+        keywords: ['resume paper closeup', 'cv document'],
+        narration: {
+          en: 'One: your last job title — does it sound like the role? Two: your dates — steady, recent, no mystery gaps.',
+          es: 'Uno: tu último puesto — ¿suena al rol que buscan? Dos: tus fechas — estables, recientes, sin huecos misteriosos.',
+        },
+      },
+      {
+        query: 'person editing document laptop',
+        keywords: ['editing resume screen', 'laptop document work'],
+        narration: {
+          en: 'Three: the top third of page one. Your best, most relevant wins go there — not an objective paragraph.',
+          es: 'Tres: el primer tercio de la primera página. Ahí van tus logros más relevantes — no un párrafo de objetivos.',
+        },
+      },
+      {
+        query: 'confident person phone smile',
+        keywords: ['confident professional', 'person smiling phone'],
+        narration: {
+          en: 'See what a recruiter sees. NeuroHires dot com.',
+          es: 'Mira lo que ve un reclutador. NeuroHires punto com.',
+        },
+      },
+    ],
+  },
 ];
 
 /** All brands the engine advertises. Rotation runs per brand, every day. */
