@@ -83,13 +83,50 @@ export function normalizeSpokenUrls(cues: CaptionCue[]): void {
   // text; two-word splits ("ring yield") also need their karaoke WORDS merged.
   const BRAND_FIXES: Array<{ re: RegExp; to: string }> = [
     { re: /\bforge[\s-]?(?:vid|vids|bid|bit|beat|bead|bed|beed|feed|fit|vit)\b/gi, to: 'ForgeVid' },
-    { re: /\bring[\s-]?(?:yield|yields|yielded|shield)\b/gi, to: 'RingYield' },
-    { re: /\bneuro[\s-]?(?:hires?|higher|hides)\b/gi, to: 'NeuroHires' },
+    // "guild/gild" family: how Whisper hears the cloned voice's "Yield",
+    // especially on Spanish narrations (reported on live clips 2026-07-26).
+    // "il/iel" family: Whisper compressing the Spanish-accented "Yield" into
+    // one short token — caught on a live re-render frame ("Ringil.com").
+    { re: /\bring[\s-]?(?:yield|yields|yielded|shield|guild|guilds|gild|gilt|guilt|yild|jield|il|iel|uil|yil|yl|eel)\b/gi, to: 'RingYield' },
+    // "gires/guires" family: Spanish-phonetics mishearing of "Hires" (same report).
+    { re: /\bneuro[\s-]?(?:hires?|higher|hides|gires|guires|gyres|jires|guias|guías)\b/gi, to: 'NeuroHires' },
   ];
   const isDot = (w: string) => /^(dot|punto)[.,]?$/i.test(w);
   const isCom = (w: string) => /^com[.,!?]*$/i.test(w);
   const stripPunct = (w: string) => w.replace(/[.,!?]+$/, '');
   const applyBrandFixes = (s: string) => BRAND_FIXES.reduce((v, b) => v.replace(b.re, b.to), s);
+  // Whisper is nondeterministic: every re-transcription can invent a NEW
+  // spelling of the cloned voice's brand pronunciation ("Ringil", "Ringgill",
+  // "NeuroGires" — all seen on real renders the same day). Enumerating them is
+  // whack-a-mole, so in DOMAIN context only (a token spoken as "X dot/punto
+  // com") we fuzzy-snap to a known brand within edit distance 3. Real domains
+  // stay safe: "rings" is distance 5 from "ringyield", "ringcentral" further.
+  const SNAP_BRANDS = ['ForgeVid', 'RingYield', 'NeuroHires'];
+  const editDistance = (a: string, b: string): number => {
+    const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...new Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+        );
+      }
+    }
+    return dp[a.length][b.length];
+  };
+  const snapBrand = (token: string): string => {
+    const base = token.toLowerCase().replace(/[^a-zà-ÿ]/g, '');
+    if (base.length < 4) return token;
+    for (const brand of SNAP_BRANDS) {
+      const target = brand.toLowerCase();
+      if (base.slice(0, 3) === target.slice(0, 3) && editDistance(base, target) <= 3) {
+        return brand;
+      }
+    }
+    return token;
+  };
   const BRAND_NAMES = new Set(BRAND_FIXES.map((b) => b.to.toLowerCase()));
   /** Anchored (whole-string) versions of the brand patterns, for pair merging. */
   const BRAND_PAIR_RES = BRAND_FIXES.map(
@@ -100,7 +137,9 @@ export function normalizeSpokenUrls(cues: CaptionCue[]): void {
   const BRAND_COM_RE = new RegExp(`\\b(${BRAND_FIXES.map((b) => b.to).join('|')})[,.]?\\s+com\\b`, 'gi');
 
   for (const cue of cues) {
-    cue.text = applyBrandFixes(cue.text.replace(TEXT_RE, '$1.com')).replace(BRAND_COM_RE, '$1.com');
+    cue.text = applyBrandFixes(
+      cue.text.replace(TEXT_RE, (_m, p1: string) => `${snapBrand(p1)}.com`),
+    ).replace(BRAND_COM_RE, '$1.com');
 
     if (cue.words) {
       // Two-word brand splits: merge ("ring","yield") into one timed word so
@@ -131,7 +170,7 @@ export function normalizeSpokenUrls(cues: CaptionCue[]): void {
         // "X" + "dot|punto" + "com" -> one timed word "X.com"
         if (c && isDot(b.word) && isCom(c.word)) {
           const trailing = c.word.match(/[.,!?]+$/)?.[0] ?? '';
-          a.word = `${stripPunct(a.word)}.com${trailing}`;
+          a.word = `${snapBrand(stripPunct(a.word))}.com${trailing}`;
           a.end = c.end;
           cue.words.splice(i + 1, 2);
           i -= 1;
@@ -142,13 +181,14 @@ export function normalizeSpokenUrls(cues: CaptionCue[]): void {
         // ("X" + "com" where the normalized text contains "X.com"), or dropped
         // it EVERYWHERE but X is one of our brands (brand + "com" is
         // unambiguous) -> merge.
+        const aSnapped = snapBrand(stripPunct(a.word));
         if (
           isCom(b.word) &&
-          (cue.text.toLowerCase().includes(`${stripPunct(a.word).toLowerCase()}.com`) ||
-            BRAND_NAMES.has(stripPunct(a.word).toLowerCase()))
+          (cue.text.toLowerCase().includes(`${aSnapped.toLowerCase()}.com`) ||
+            BRAND_NAMES.has(aSnapped.toLowerCase()))
         ) {
           const trailing = b.word.match(/[.,!?]+$/)?.[0] ?? '';
-          a.word = `${stripPunct(a.word)}.com${trailing}`;
+          a.word = `${aSnapped}.com${trailing}`;
           a.end = b.end;
           cue.words.splice(i + 1, 1);
           i -= 1;
