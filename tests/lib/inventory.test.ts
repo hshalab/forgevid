@@ -106,4 +106,35 @@ describe('scoreItem', () => {
     )
     expect(veryOld.score).toBe(cappedAt60.score)
   })
+
+  it('uses customer scoring weights and a configured seasonal signal', () => {
+    const result = scoreItem(
+      { firstSeenAt: daysAgo(10), lastSeenAt: daysAgo(0), priceText: '$10,000' },
+      [{ priceText: '$10,000', videoId: null, createdAt: daysAgo(0) }],
+      NOW,
+      {
+        agingWeight: 2, missingVideoWeight: 5, priceChangeWeight: 0,
+        newArrivalWeight: 0, seasonalWeight: 40, seasonalMonths: [NOW.getMonth() + 1],
+        revenueAtRiskMethod: 'none', revenueAtRiskWeight: 0,
+      },
+    )
+    expect(result.score).toBe(65)
+    expect(result.reasons).toContain('customer-configured seasonal priority')
+  })
+
+  it('labels the revenue-at-risk methodology as a proxy without inventing an amount', () => {
+    const result = scoreItem(
+      { firstSeenAt: daysAgo(40), lastSeenAt: daysAgo(0), priceText: '$500,000' },
+      [{ priceText: '$500,000', videoId: null, createdAt: daysAgo(0) }],
+      NOW,
+      {
+        agingWeight: 0, missingVideoWeight: 0, priceChangeWeight: 0,
+        newArrivalWeight: 0, seasonalWeight: 0, seasonalMonths: [],
+        revenueAtRiskMethod: 'price_text_proxy', revenueAtRiskWeight: 25,
+      },
+    )
+    expect(result.score).toBe(25)
+    expect(result.reasons).toContain('revenue-at-risk proxy: priced inventory aged 30+ days')
+    expect(result.reasons.join(' ')).not.toContain('$500,000')
+  })
 })

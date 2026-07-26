@@ -36,6 +36,16 @@ function isCsrfExemptApiPath(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const hostname = (request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.hostname)
+    .split(':')[0]
+    .toLowerCase();
+  const forgevidHost = hostname === 'forgevid.com' || hostname === 'www.forgevid.com' ||
+    hostname === 'localhost' || hostname.endsWith('.railway.app');
+  // A verified customer hostname's root resolves server-side to its configured
+  // approved campaign creative. Non-root assets and /l routes pass through.
+  if (pathname === '/' && !forgevidHost) {
+    return NextResponse.rewrite(new URL('/api/custom-domain', request.url));
+  }
 
   // Skip middleware for static files, internal routes, and health checks.
   //

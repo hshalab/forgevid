@@ -960,6 +960,133 @@ model InventorySnapshot {
   @@map("inventory_snapshots")
 }
 
+/// A customer-authorized recurring inventory connection. Secrets are stored as
+/// one AES-GCM encrypted JSON blob and are never returned by an API.
+model InventorySource {
+  id                   String    @id @default(cuid())
+  userId               String
+  name                 String
+  vertical             String
+  feedUrl              String
+  credentialCiphertext String?
+  fieldMapping         String?   // JSON object: ForgeVid field -> source field
+  authorizationBasis   String
+  authorizationExpiresAt DateTime?
+  enabled              Boolean   @default(true)
+  scheduleEnabled      Boolean   @default(false)
+  cadence              String    @default("daily")
+  nextRunAt             DateTime?
+  lastRunAt             DateTime?
+  lastSuccessAt         DateTime?
+  lastError             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  runs InventoryImportRun[]
+
+  @@index([userId, enabled])
+  @@index([scheduleEnabled, nextRunAt])
+  @@map("inventory_sources")
+}
+
+model InventoryImportRun {
+  id         String          @id @default(cuid())
+  sourceId   String
+  source     InventorySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  status     String          @default("PENDING")
+  itemsRead  Int             @default(0)
+  itemsValid Int             @default(0)
+  itemsFailed Int            @default(0)
+  errorArchive String?       // JSON array of row-safe validation errors
+  startedAt  DateTime        @default(now())
+  finishedAt DateTime?
+
+  @@index([sourceId, startedAt])
+  @@map("inventory_import_runs")
+}
+
+/// Rights provenance for each customer-supplied inventory asset.
+model InventoryAssetAuthorization {
+  id            String    @id @default(cuid())
+  userId        String
+  inventoryItemId String?
+  assetUrl      String
+  sourceUrl     String?
+  authorizationBasis String
+  authorizedBy  String?
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, assetUrl])
+  @@index([userId, revokedAt, expiresAt])
+  @@index([inventoryItemId])
+  @@map("inventory_asset_authorizations")
+}
+
+model GrowthScoringSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  agingWeight        Int      @default(1)
+  missingVideoWeight Int      @default(30)
+  priceChangeWeight  Int      @default(25)
+  newArrivalWeight   Int      @default(15)
+  seasonalWeight     Int      @default(0)
+  seasonalMonths     String   @default("[]")
+  revenueAtRiskMethod String  @default("none")
+  revenueAtRiskWeight Int     @default(0)
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+
+  @@map("growth_scoring_settings")
+}
+
+model DiscountCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  stripeCouponId String
+  percentOff     Int?
+  amountOffCents Int?
+  currency       String    @default("usd")
+  maxRedemptions Int?
+  redemptions    Int       @default(0)
+  active         Boolean   @default(true)
+  expiresAt      DateTime?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([active, expiresAt])
+  @@map("discount_codes")
+}
+
+model DiscountRedemption {
+  id              String   @id @default(cuid())
+  discountCodeId  String
+  stripeSessionId String   @unique
+  userId          String
+  createdAt       DateTime @default(now())
+
+  @@index([discountCodeId])
+  @@map("discount_redemptions")
+}
+
+model CampaignDomain {
+  id                String    @id @default(cuid())
+  userId            String
+  hostname          String    @unique
+  verificationToken String
+  verifiedAt        DateTime?
+  defaultCreativeId String?
+  enabled           Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId, enabled])
+  @@map("campaign_domains")
+}
+
 /// A view or lead-submission on a public /l/[creativeId] landing page. The
 /// AdCreative's own cuid id doubles as the public link segment — already
 /// unguessable, no separate slug/token needed.

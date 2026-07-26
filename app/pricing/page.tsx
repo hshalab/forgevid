@@ -10,6 +10,7 @@ export default function PricingPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState('');
 
   const handleSubscribe = async (planId: string) => {
     if (!session) {
@@ -29,7 +30,7 @@ export default function PricingPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, couponCode: couponCode.trim() || undefined }),
       });
 
       const data = await response.json();
@@ -64,7 +65,7 @@ export default function PricingPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ type: 'credits', pack }),
+        body: JSON.stringify({ type: 'credits', pack, couponCode: couponCode.trim() || undefined }),
       });
 
       const data = await response.json();
@@ -125,6 +126,16 @@ export default function PricingPage() {
             Buy one video with no subscription, or pick a plan. Every video is yours to
             download and post anywhere — TikTok, Reels, Shorts, YouTube, your site.
           </p>
+          <label className="mx-auto mt-6 block max-w-sm text-left text-sm text-gray-200">
+            Coupon code (optional)
+            <input
+              value={couponCode}
+              onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+              autoComplete="off"
+              className="mt-2 h-11 w-full rounded-lg border border-white/20 bg-black/30 px-3 text-white"
+              placeholder="ENTER CODE"
+            />
+          </label>
         </div>
 
         {/* ── Founding pilot: direct acquisition offer ───────────────────── */}

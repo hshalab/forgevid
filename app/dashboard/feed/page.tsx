@@ -80,6 +80,11 @@ interface PreviewItem { ref: string; label: string; photos: number }
 interface BatchResult { ref: string; label: string; language?: string; videoId?: string; photosUsed?: number; error?: string }
 interface BatchResponse { started: number; failed: number; message?: string; results: BatchResult[] }
 interface JobStatus { status: string; percent: number; thumbnail?: string | null; videoUrl?: string | null; error?: string | null }
+interface SavedSource {
+  id: string; name: string; vertical: string; feedUrl: string; scheduleEnabled: boolean;
+  cadence: string; lastSuccessAt?: string | null; lastError?: string | null;
+  runs?: Array<{ id: string; status: string; itemsRead: number; itemsFailed: number; startedAt: string; errorArchive?: string | null }>
+}
 
 export default function FeedToVideosPage() {
   const [vertical, setVertical] = useState<VerticalKey>("automotive")
@@ -107,6 +112,12 @@ export default function FeedToVideosPage() {
   const [voiceId, setVoiceId] = useState(DEFAULT_VOICE_ID)
   const [captionPreset, setCaptionPreset] = useState<string>("default")
   const [approvedByUser, setApprovedByUser] = useState(false)
+  const [sources, setSources] = useState<SavedSource[]>([])
+  const [sourceForm, setSourceForm] = useState({
+    name: "", authorizationBasis: "", authorizationExpiresAt: "", apiKey: "",
+    fieldMapping: "", scheduleEnabled: false, cadence: "daily",
+  })
+  const [sourceSaving, setSourceSaving] = useState(false)
 
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<{ count: number; items: PreviewItem[] } | null>(null)
@@ -119,6 +130,50 @@ export default function FeedToVideosPage() {
   const cfg = VERTICALS[vertical]
 
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current) }, [])
+  const loadSources = () => fetch("/api/inventory/sources", { cache: "no-store" })
+    .then((response) => response.ok ? response.json() : Promise.reject())
+    .then((data) => setSources(data.sources || []))
+    .catch(() => {})
+  useEffect(() => { void loadSources() }, [])
+
+  async function saveSource() {
+    if (!feedUrl.trim()) { setError("Enter the authorized feed URL first."); return }
+    setSourceSaving(true); setError(null)
+    try {
+      let fieldMapping: Record<string, string> | undefined
+      if (sourceForm.fieldMapping.trim()) {
+        fieldMapping = JSON.parse(sourceForm.fieldMapping)
+        if (!fieldMapping || Array.isArray(fieldMapping) || typeof fieldMapping !== "object") throw new Error("Field mapping must be a JSON object.")
+      }
+      const response = await fetch("/api/inventory/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: sourceForm.name || new URL(feedUrl).hostname,
+          vertical: vertical === "automotive" ? "auto" : vertical === "realestate" ? "realestate" : "ecom",
+          feedUrl,
+          authorizationBasis: sourceForm.authorizationBasis,
+          authorizationExpiresAt: sourceForm.authorizationExpiresAt ? new Date(sourceForm.authorizationExpiresAt).toISOString() : null,
+          fieldMapping,
+          credentials: sourceForm.apiKey ? { apiKey: sourceForm.apiKey } : undefined,
+          scheduleEnabled: sourceForm.scheduleEnabled,
+          cadence: sourceForm.cadence,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || "Could not save the source.")
+      setSourceForm({ name: "", authorizationBasis: "", authorizationExpiresAt: "", apiKey: "", fieldMapping: "", scheduleEnabled: false, cadence: "daily" })
+      await loadSources()
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save the source.") } finally { setSourceSaving(false) }
+  }
+
+  async function runSavedSource(id: string) {
+    setSourceSaving(true); setError(null)
+    const response = await fetch(`/api/inventory/sources/${id}/run`, { method: "POST" })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) setError(data.error || "Import failed.")
+    await loadSources(); setSourceSaving(false)
+  }
 
   function resetOutputs() { setPreview(null); setResult(null); setJobs({}); setError(null); if (pollRef.current) clearTimeout(pollRef.current) }
   function selectVertical(v: VerticalKey) { setVertical(v); setAspect(VERTICALS[v].defaultAspect); setPasteText(""); resetOutputs() }
@@ -252,6 +307,20 @@ export default function FeedToVideosPage() {
   async function runGenerate() {
     setError(null); setGenerating(true)
     try {
+      if (mode === "single" || mode === "screenshots") {
+        const photos = [...uploadedUrls, ...photoUrls.split(/\r?\n|,/).map((url) => url.trim()).filter(Boolean)]
+        const records = await Promise.all(photos.map((assetUrl) => fetch("/api/inventory/authorizations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            assetUrl: new URL(assetUrl, window.location.origin).toString(),
+            sourceUrl: sourceUrl.trim() || null,
+            authorizationBasis: uploadedUrls.includes(assetUrl) ? "customer-upload" : "customer-authorized-url",
+            authorizedBy: "account owner confirmation",
+          }),
+        })))
+        if (records.some((response) => !response.ok)) throw new Error("Could not persist photo authorization. Generation was not started.")
+      }
       const data = (await post(collectBody({}))) as BatchResponse
       setResult(data)
       const ids = (data.results ?? []).filter((r) => r.videoId).map((r) => r.videoId as string)
@@ -289,6 +358,38 @@ export default function FeedToVideosPage() {
         </h1>
         <p className="text-gray-400 mt-1">Point us at your inventory feed (or paste it) and we make a video for every item — one shared flow for every vertical.</p>
       </div>
+
+      <Card className="border-blue-500/25 bg-blue-950/10">
+        <CardHeader>
+          <CardTitle>Saved MLS/CRM sources</CardTitle>
+          <CardDescription>Store an authorized source, optional encrypted API key, field mapping, and import schedule. Credentials are never shown again.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input value={sourceForm.name} onChange={(e) => setSourceForm({ ...sourceForm, name: e.target.value })} placeholder="Source name" />
+            <Input value={sourceForm.authorizationBasis} onChange={(e) => setSourceForm({ ...sourceForm, authorizationBasis: e.target.value })} placeholder="Authorization basis (for example: brokerage RESO agreement)" />
+            <Input type="date" value={sourceForm.authorizationExpiresAt} onChange={(e) => setSourceForm({ ...sourceForm, authorizationExpiresAt: e.target.value })} aria-label="Authorization expiration" />
+            <Input type="password" autoComplete="new-password" value={sourceForm.apiKey} onChange={(e) => setSourceForm({ ...sourceForm, apiKey: e.target.value })} placeholder="Optional feed API key" />
+          </div>
+          <Textarea value={sourceForm.fieldMapping} onChange={(e) => setSourceForm({ ...sourceForm, fieldMapping: e.target.value })} placeholder={'Optional JSON field mapping, e.g. {"title":"vehicle_name","ref":"stock_id","photos":"image_urls"}'} />
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sourceForm.scheduleEnabled} onChange={(e) => setSourceForm({ ...sourceForm, scheduleEnabled: e.target.checked })} /> Scheduled import</label>
+            <select className="h-9 rounded-md border bg-background px-3" value={sourceForm.cadence} onChange={(e) => setSourceForm({ ...sourceForm, cadence: e.target.value })}><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
+            <Button onClick={() => void saveSource()} disabled={sourceSaving || !feedUrl || !sourceForm.authorizationBasis}>{sourceSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save current feed</Button>
+          </div>
+          {sources.map((source) => (
+            <div key={source.id} className="rounded-lg border border-white/10 p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><strong>{source.name}</strong> <Badge variant="outline">{source.vertical}</Badge><div className="max-w-xl truncate text-xs text-muted-foreground">{source.feedUrl}</div></div>
+                <Button size="sm" variant="outline" onClick={() => void runSavedSource(source.id)} disabled={sourceSaving}>Import now</Button>
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">{source.scheduleEnabled ? `${source.cadence} schedule` : "Manual"} · Last success: {source.lastSuccessAt ? new Date(source.lastSuccessAt).toLocaleString() : "never"}</div>
+              {source.lastError && <div className="mt-1 text-xs text-red-400">{source.lastError}</div>}
+              {source.runs?.[0] && <div className="mt-1 text-xs">Latest run: {source.runs[0].status} · {source.runs[0].itemsRead} read · {source.runs[0].itemsFailed} failed</div>}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card className="bg-white/5 border-white/10">
         <CardHeader>

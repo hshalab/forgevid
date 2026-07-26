@@ -198,6 +198,8 @@ export async function POST(req: NextRequest) {
       addOns: ['voiceover', 'subtitles'],
       maxPhotosPerItem: MAX_PHOTOS_PER_LISTING,
       vertical: 'realestate',
+      authorizationBasis: feedUrl ? 'authorized-feed' : 'customer-confirmation',
+      sourceUrl: feedUrl ?? null,
     });
     started += batch.started;
     failed += batch.failed;

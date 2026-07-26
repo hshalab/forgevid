@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { Loader2, Sparkles, TrendingUp, CalendarClock } from "lucide-react"
 import { useGrowthLocale } from "@/hooks/use-growth-locale"
 
@@ -61,6 +62,12 @@ export default function RecommendationsPage() {
   const [createdCampaigns, setCreatedCampaigns] = useState<Record<string, string>>({})
   const [schedule, setSchedule] = useState({ enabled: false, cadence: "daily", emailEnabled: true, maxDecisions: 1 })
   const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [weights, setWeights] = useState({
+    agingWeight: 1, missingVideoWeight: 30, priceChangeWeight: 25,
+    newArrivalWeight: 15, seasonalWeight: 0, seasonalMonths: [] as number[],
+    revenueAtRiskMethod: "none", revenueAtRiskWeight: 0,
+  })
+  const [weightsSaving, setWeightsSaving] = useState(false)
 
   useEffect(() => {
     fetch("/api/growth-operator/schedule", { cache: "no-store" })
@@ -73,6 +80,22 @@ export default function RecommendationsPage() {
       }))
       .catch(() => {})
   }, [])
+  useEffect(() => {
+    fetch("/api/inventory/scoring-settings", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setWeights(data.settings))
+      .catch(() => {})
+  }, [])
+
+  const saveWeights = async () => {
+    setWeightsSaving(true)
+    const response = await fetch("/api/inventory/scoring-settings", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(weights),
+    })
+    if (!response.ok) setError("Could not save opportunity scoring settings.")
+    else window.location.reload()
+    setWeightsSaving(false)
+  }
 
   const saveSchedule = async () => {
     setScheduleSaving(true)
@@ -220,6 +243,25 @@ export default function RecommendationsPage() {
           <Button onClick={() => void saveSchedule()} disabled={scheduleSaving}>
             {scheduleSaving && <Loader2 className="h-4 w-4 animate-spin" />} {t("saveSchedule")}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Business scoring method</CardTitle>
+          <CardDescription>Make prioritization fit your business. Revenue at risk is a documented proxy, never an invented revenue amount.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          {([
+            ["agingWeight", "Aging ×"], ["missingVideoWeight", "No recent video"],
+            ["priceChangeWeight", "Price change"], ["newArrivalWeight", "New arrival"],
+            ["seasonalWeight", "Seasonal"], ["revenueAtRiskWeight", "Revenue-risk proxy"],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="text-xs">{label}<input type="number" min={0} max={100} className="mt-1 h-9 w-full rounded-md border bg-background px-2" value={weights[key]} onChange={(event) => setWeights({ ...weights, [key]: Number(event.target.value) })} /></label>
+          ))}
+          <label className="text-xs">Seasonal months (1–12)<Input className="mt-1" value={weights.seasonalMonths.join(",")} onChange={(event) => setWeights({ ...weights, seasonalMonths: event.target.value.split(",").map(Number).filter((month) => month >= 1 && month <= 12) })} /></label>
+          <label className="text-xs">Revenue-at-risk method<select className="mt-1 h-9 w-full rounded-md border bg-background px-2" value={weights.revenueAtRiskMethod} onChange={(event) => setWeights({ ...weights, revenueAtRiskMethod: event.target.value })}><option value="none">None</option><option value="price_text_proxy">Priced + 30 days proxy</option><option value="manual_priority">Manual priority only</option></select></label>
+          <div className="md:col-span-4"><Button onClick={() => void saveWeights()} disabled={weightsSaving}>{weightsSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save scoring method</Button></div>
         </CardContent>
       </Card>
 

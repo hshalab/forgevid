@@ -143,6 +143,8 @@ export async function POST(req: NextRequest) {
       renderQuality,
       captionPreset,
       vertical: 'ecom',
+      authorizationBasis: feedUrl ? 'authorized-feed' : 'customer-confirmation',
+      sourceUrl: feedUrl ?? null,
     });
     started += batch.started;
     failed += batch.failed;

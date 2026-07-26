@@ -39,6 +39,21 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        const discountCode = session.metadata?.discountCode;
+        const redemptionUserId = session.metadata?.userId || session.client_reference_id;
+        if (discountCode && redemptionUserId) {
+          const discount = await prisma.discountCode.findUnique({ where: { code: discountCode } });
+          if (discount) {
+            await prisma.$transaction([
+              prisma.discountRedemption.create({
+                data: { discountCodeId: discount.id, stripeSessionId: session.id, userId: redemptionUserId },
+              }),
+              prisma.discountCode.update({ where: { id: discount.id }, data: { redemptions: { increment: 1 } } }),
+            ]).catch((error: any) => {
+              if (error?.code !== 'P2002') console.error('[Webhook] Failed to record discount redemption:', error);
+            });
+          }
+        }
 
         // One-time credit-pack purchase (SINGLE/TOPUP10/TOPUP25) — a distinct
         // flow from the subscription checkout below: grant the ledger, record a

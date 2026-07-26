@@ -170,6 +170,7 @@ export default async function AdminOverviewPage() {
                 { href: '/admin/leads', label: 'Outbound leads — dealer/realtor/e-commerce pipeline' },
                 { href: '/admin/ai-decisions', label: 'Gemini decisions — prompts, results, cost per generation' },
                 { href: '/admin/operating-costs', label: 'Operating costs — hosting, contractor, tooling, marketing spend' },
+                { href: '/admin/discounts', label: 'Discount codes — Stripe-backed coupons separate from referrals' },
               ].map((t) => (
                 <Link
                   key={t.href}

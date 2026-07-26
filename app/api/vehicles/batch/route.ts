@@ -145,6 +145,8 @@ export async function POST(req: NextRequest) {
       renderQuality,
       captionPreset,
       vertical: 'auto',
+      authorizationBasis: feedUrl ? 'authorized-feed' : 'customer-confirmation',
+      sourceUrl: feedUrl ?? null,
     });
     started += batch.started;
     failed += batch.failed;

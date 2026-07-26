@@ -36,6 +36,10 @@ interface ApprovalRow {
     createdAt: string;
   }>;
 }
+interface CampaignDomain {
+  id: string; hostname: string; defaultCreativeId?: string | null; verifiedAt?: string | null;
+  dns: { type: string; name: string; value: string };
+}
 
 const FILTERS = ["AWAITING_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED", "ALL"];
 
@@ -50,6 +54,8 @@ export default function ApprovalsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [revisions, setRevisions] = useState<Record<string, { hook: string; cta: string }>>({});
+  const [domains, setDomains] = useState<CampaignDomain[]>([]);
+  const [domainForm, setDomainForm] = useState({ hostname: "", defaultCreativeId: "" });
 
   const load = async () => {
     setLoading(true);
@@ -68,7 +74,31 @@ export default function ApprovalsPage() {
 
   useEffect(() => {
     void load();
+    fetch("/api/campaign-domains", { cache: "no-store" }).then((response) => response.ok ? response.json() : null)
+      .then((data) => setDomains(data?.domains || [])).catch(() => {});
   }, []);
+
+  const addDomain = async () => {
+    setSaving("domain");
+    const response = await fetch("/api/campaign-domains", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(domainForm),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) setError(data.error || "Could not add campaign domain.");
+    else { setDomains((current) => [{ ...data.domain, dns: data.dns }, ...current]); setDomainForm({ hostname: "", defaultCreativeId: "" }); }
+    setSaving(null);
+  };
+
+  const verifyDomain = async (id: string) => {
+    setSaving(id);
+    const response = await fetch("/api/campaign-domains/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) setError(data.error || "Domain verification failed.");
+    else setDomains((current) => current.map((domain) => domain.id === id ? { ...domain, verifiedAt: data.domain.verifiedAt } : domain));
+    setSaving(null);
+  };
 
   const visible = useMemo(
     () => rows.filter((row) => filter === "ALL" || row.approvalStatus === filter),
@@ -147,6 +177,28 @@ export default function ApprovalsPage() {
           <RefreshCcw className="h-4 w-4" /> Refresh
         </Button>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Customer campaign domains</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">Choose an approved creative, prove DNS ownership, then attach the hostname to the ForgeVid Railway service. The domain root opens only that reviewed revision.</p>
+          <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+            <Input value={domainForm.hostname} onChange={(event) => setDomainForm({ ...domainForm, hostname: event.target.value })} placeholder="campaign.yourbrand.com" />
+            <select className="h-10 rounded-md border bg-background px-3" value={domainForm.defaultCreativeId} onChange={(event) => setDomainForm({ ...domainForm, defaultCreativeId: event.target.value })}>
+              <option value="">Select approved creative</option>
+              {rows.filter((row) => row.approvalStatus === "APPROVED").map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}
+            </select>
+            <Button onClick={() => void addDomain()} disabled={saving === "domain" || !domainForm.hostname || !domainForm.defaultCreativeId}>Add domain</Button>
+          </div>
+          {domains.map((domain) => (
+            <div key={domain.id} className="rounded-md border p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2"><strong>{domain.hostname}</strong><Badge>{domain.verifiedAt ? "Verified" : "Pending DNS"}</Badge></div>
+              <div className="mt-1 break-all text-xs text-muted-foreground">TXT {domain.dns.name} = {domain.dns.value}</div>
+              {!domain.verifiedAt && <Button className="mt-2" size="sm" variant="outline" onClick={() => void verifyDomain(domain.id)} disabled={saving === domain.id}>Verify DNS</Button>}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((value) => (

@@ -64,6 +64,9 @@ export interface FeedBatchOptions {
    * callers keep working unchanged.
    */
   vertical?: Vertical;
+  /** Persisted rights provenance supplied only after the route's confirmation gate. */
+  authorizationBasis?: string;
+  sourceUrl?: string | null;
 }
 
 export interface FeedBatchResult {
@@ -83,6 +86,27 @@ export async function runFeedBatch(
 
   for (const item of items) {
     const result: FeedBatchResult = { ref: item.ref, label: item.label };
+    if (opts.authorizationBasis) {
+      const authorizationBasis = opts.authorizationBasis;
+      await Promise.all(item.photos.map((assetUrl) => prisma.inventoryAssetAuthorization.upsert({
+        where: { userId_assetUrl: { userId: opts.userId, assetUrl } },
+        update: {
+          sourceUrl: opts.sourceUrl ?? null,
+          authorizationBasis,
+          authorizedBy: 'account owner confirmation',
+          revokedAt: null,
+        },
+        create: {
+          userId: opts.userId,
+          assetUrl,
+          sourceUrl: opts.sourceUrl ?? null,
+          authorizationBasis,
+          authorizedBy: 'account owner confirmation',
+        },
+      }))).catch((error) => {
+        console.error(`[feed-batch] asset authorization failed for ${item.ref}:`, error);
+      });
+    }
 
     // Cross-request inventory tracking (price changes, days in inventory, "no
     // recent video") is best-effort: a tracking hiccup must never break the

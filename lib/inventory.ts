@@ -105,12 +105,28 @@ export interface Opportunity {
 const RECENT_VIDEO_WINDOW_DAYS = 14;
 const NEW_ARRIVAL_WINDOW_DAYS = 2;
 const MAX_AGING_SCORE = 60;
+export interface ScoringWeights {
+  agingWeight: number;
+  missingVideoWeight: number;
+  priceChangeWeight: number;
+  newArrivalWeight: number;
+  seasonalWeight: number;
+  seasonalMonths: number[];
+  revenueAtRiskMethod: 'none' | 'price_text_proxy' | 'manual_priority';
+  revenueAtRiskWeight: number;
+}
+const DEFAULT_WEIGHTS: ScoringWeights = {
+  agingWeight: 1, missingVideoWeight: 30, priceChangeWeight: 25,
+  newArrivalWeight: 15, seasonalWeight: 0, seasonalMonths: [],
+  revenueAtRiskMethod: 'none', revenueAtRiskWeight: 0,
+};
 
 /** Pure scoring function — no I/O, so it's directly unit-testable. */
 export function scoreItem(
-  item: { firstSeenAt: Date; lastSeenAt: Date },
+  item: { firstSeenAt: Date; lastSeenAt: Date; priceText?: string | null },
   snapshots: Array<{ priceText: string | null; videoId: string | null; createdAt: Date }>,
   now: Date,
+  weights: ScoringWeights = DEFAULT_WEIGHTS,
 ): Omit<Opportunity, 'itemId' | 'externalRef' | 'label' | 'vertical' | 'priceText'> {
   const daysInInventory = Math.floor((now.getTime() - item.firstSeenAt.getTime()) / 86_400_000);
   const isNewArrival = daysInInventory <= NEW_ARRIVAL_WINDOW_DAYS;
@@ -135,22 +151,30 @@ export function scoreItem(
   let score = 0;
 
   const agingScore = Math.min(daysInInventory, MAX_AGING_SCORE);
-  score += agingScore;
+  score += agingScore * weights.agingWeight;
   if (daysInInventory >= 14) reasons.push(`${daysInInventory} days in inventory`);
 
   if (!hasRecentVideo) {
-    score += 30;
+    score += weights.missingVideoWeight;
     reasons.push(withVideo.length === 0 ? 'never had a video made' : `no video in the last ${RECENT_VIDEO_WINDOW_DAYS} days`);
   }
 
   if (priceChangedSinceLastVideo) {
-    score += 25;
+    score += weights.priceChangeWeight;
     reasons.push('price changed since the last video');
   }
 
   if (isNewArrival) {
-    score += 15;
+    score += weights.newArrivalWeight;
     reasons.push('new arrival — no video yet');
+  }
+  if (weights.seasonalMonths.includes(now.getMonth() + 1) && weights.seasonalWeight > 0) {
+    score += weights.seasonalWeight;
+    reasons.push('customer-configured seasonal priority');
+  }
+  if (weights.revenueAtRiskMethod === 'price_text_proxy' && item.priceText && daysInInventory >= 30) {
+    score += weights.revenueAtRiskWeight;
+    reasons.push('revenue-at-risk proxy: priced inventory aged 30+ days');
   }
 
   return { daysInInventory, priceChangedSinceLastVideo, hasRecentVideo, isNewArrival, score, reasons };
@@ -162,14 +186,27 @@ export async function getRecommendations(
   vertical?: Vertical,
   limit = 10,
 ): Promise<Opportunity[]> {
-  const items = await prisma.inventoryItem.findMany({
-    where: { userId, removedAt: null, ...(vertical ? { vertical } : {}) },
-    include: { snapshots: { select: { priceText: true, videoId: true, createdAt: true } } },
-  });
+  const [items, configured] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: { userId, removedAt: null, ...(vertical ? { vertical } : {}) },
+      include: { snapshots: { select: { priceText: true, videoId: true, createdAt: true } } },
+    }),
+    prisma.growthScoringSettings.findUnique({ where: { userId } }),
+  ]);
+  const weights: ScoringWeights = configured ? {
+    agingWeight: configured.agingWeight,
+    missingVideoWeight: configured.missingVideoWeight,
+    priceChangeWeight: configured.priceChangeWeight,
+    newArrivalWeight: configured.newArrivalWeight,
+    seasonalWeight: configured.seasonalWeight,
+    seasonalMonths: JSON.parse(configured.seasonalMonths || '[]'),
+    revenueAtRiskMethod: configured.revenueAtRiskMethod as ScoringWeights['revenueAtRiskMethod'],
+    revenueAtRiskWeight: configured.revenueAtRiskWeight,
+  } : DEFAULT_WEIGHTS;
 
   const now = new Date();
   const scored: Opportunity[] = items.map((item) => {
-    const rest = scoreItem(item, item.snapshots, now);
+    const rest = scoreItem(item, item.snapshots, now, weights);
     return {
       itemId: item.id,
       externalRef: item.externalRef,

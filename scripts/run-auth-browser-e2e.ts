@@ -71,6 +71,7 @@ try {
     'tests/e2e/authenticated-platform.spec.ts',
     '--project=chromium',
     '--workers=1',
+    ...process.argv.slice(2),
   ], env)
 } finally {
   spawnSync(docker, ['rm', '-f', container], { stdio: 'ignore' })

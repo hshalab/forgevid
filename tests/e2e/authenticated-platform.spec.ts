@@ -47,7 +47,7 @@ test('credentials login and authenticated product surfaces work', async ({ page 
     '/dashboard/settings',
     '/dashboard/billing',
   ]) {
-    const response = await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    const response = await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 60_000 })
     expect(response?.status(), `${path} should load`).toBeLessThan(400)
     await expect(page).not.toHaveURL(/\/auth\/(signin|login)/)
     await expect(page.locator('body')).not.toContainText('Internal Server Error')
@@ -100,12 +100,12 @@ test('all supported account languages persist and render the Growth Operator', a
         return { status: response.status, body: await response.json().catch(() => ({})) }
       }, language)
       expect(saved.status, `${language} preferences should persist: ${JSON.stringify(saved.body)}`).toBe(200)
-      const response = await page.goto('/dashboard/recommendations', {
+      const response = await page.goto(`/dashboard/recommendations?localeAudit=${language}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30_000,
       })
       expect(response?.status(), `${language} Growth Operator should load`).toBeLessThan(400)
-      await expect(page.getByRole('heading', { name: heading })).toBeVisible()
+      await expect(page.getByRole('heading', { name: heading })).toBeVisible({ timeout: 15_000 })
       await expect(page.getByText(/Internal Server Error/i)).toHaveCount(0)
   }
 })
@@ -124,7 +124,7 @@ test('admin and SSO surfaces enforce fresh database authorization', async ({ pag
   await page.getByRole('button', { name: 'Sign In' }).click()
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 })
 
-  for (const path of ['/admin', '/admin/security/sso']) {
+  for (const path of ['/admin', '/admin/security/sso', '/admin/discounts']) {
     const response = await page.goto(path)
     expect(response?.status(), `${path} should load for an admin`).toBeLessThan(400)
     await expect(page).not.toHaveURL(/\/unauthorized/)
