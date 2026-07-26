@@ -1691,6 +1691,36 @@ const NEUROHIRES_TOPICS: MarketingTopic[] = [
 ];
 
 /** All brands the engine advertises. Rotation runs per brand, every day. */
+// Appended to every posted caption: the brand's verified free offer + a
+// cross-mention of the sister platforms. Caption-level on purpose — the
+// narration keeps ONE spoken CTA (the strategy's own rule), while the caption
+// carries the ecosystem. Free claims are only made where verified:
+// ForgeVid free plan = 2 generations/month, checkout refuses payment for it
+// (lib/stripe.ts + create-checkout-session); NeuroHires tools page + Free
+// pricing tier confirmed live 2026-07-26. RingYield has NO verified free
+// offer, so its own line makes none.
+const BRAND_FOOTERS: Record<string, Record<Lang, string>> = {
+  forgevid: {
+    en: 'Try it free — 2 videos a month at ForgeVid.com.\nAlso from us: RingYield.com (AI receptionist for service shops) and NeuroHires.com (free resume tools).',
+    es: 'Pruébalo gratis — 2 videos al mes en ForgeVid.com.\nTambién de nosotros: RingYield.com (recepcionista IA para talleres) y NeuroHires.com (herramientas de currículum gratis).',
+  },
+  ringyield: {
+    en: 'See it at RingYield.com.\nAlso from us: ForgeVid.com (2 free videos/month) and NeuroHires.com (free resume tools).',
+    es: 'Conócelo en RingYield.com.\nTambién de nosotros: ForgeVid.com (2 videos gratis al mes) y NeuroHires.com (herramientas de currículum gratis).',
+  },
+  neurohires: {
+    en: 'Free resume tools at NeuroHires.com.\nAlso from us: ForgeVid.com (2 free videos/month) and RingYield.com (AI receptionist for service shops).',
+    es: 'Herramientas de currículum gratis en NeuroHires.com.\nTambién de nosotros: ForgeVid.com (2 videos gratis al mes) y RingYield.com (recepcionista IA para talleres).',
+  },
+};
+
+/** The full paste-ready caption: topic caption + free offer + cross-promo + hashtags. */
+function fullCaption(brand: string, topic: MarketingTopic, lang: Lang): string {
+  const post = topic.post[lang];
+  const footer = BRAND_FOOTERS[brand]?.[lang];
+  return `${post.caption}\n\n${footer ? footer + '\n\n' : ''}${post.hashtags}`;
+}
+
 const BRANDS: Record<string, MarketingTopic[]> = {
   forgevid: FORGEVID_TOPICS,
   ringyield: RINGYIELD_TOPICS,
@@ -1743,7 +1773,6 @@ async function emailClip(
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
 
-  const post = topic.post[lang];
   const attach = fileBytes <= MAX_ATTACH_BYTES;
   try {
     await transporter.sendMail({
@@ -1751,7 +1780,7 @@ async function emailClip(
       to,
       subject: `📱 [${brand.toUpperCase()}] [${lang.toUpperCase()}] Post this: ${topic.slug}`,
       text:
-        `Caption (copy-paste):\n\n${post.caption}\n\n${post.hashtags}\n\n` +
+        `Caption (copy-paste):\n\n${fullCaption(brand, topic, lang)}\n\n` +
         (attach
           ? 'The clip is attached — save it to your camera roll and post.'
           : `Clip is ${(fileBytes / 1e6).toFixed(1)}MB (too big to attach) — grab it from ${filePath}.`),
@@ -1871,10 +1900,9 @@ async function main() {
           fs.writeFileSync(outPath, Buffer.from(await res.arrayBuffer()));
         }
 
-        const post = topic.post[lang];
         fs.appendFileSync(
           postsFile,
-          `## ${brand}-${topic.slug}-${lang}.mp4\n\n${post.caption}\n\n${post.hashtags}\n\n---\n\n`,
+          `## ${brand}-${topic.slug}-${lang}.mp4\n\n${fullCaption(brand, topic, lang)}\n\n---\n\n`,
         );
         rendered++;
         console.log(`    done: ${outPath} (${cues.length} caption cues)`);
