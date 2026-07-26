@@ -1076,3 +1076,44 @@ step in the Railway dashboard when one actually signs up.
 
 Merged-state verification after the concurrent session's 6 commits:
 tsc clean, 238/238 tests across 42 suites, full npm run build succeeds.
+
+## 2026-07-26 — billing certified with real money, in both directions
+
+The full verification the earlier "certified ready?" answer said was
+missing has now happened, live:
+
+- **First real purchase processed end-to-end:** $19 single-credit pack
+  (pi_3TxLFG...) at 11:09 PM → webhook signature verified → refund-state
+  checked → `[Webhook] Granted 1 credits (single)` → Payment recorded
+  SUCCEEDED. First successfully processed payment webhook in the
+  platform's history.
+- **First real refund reconciled:** refunded at 11:37 PM →
+  `[Webhook] Fully refunded payment cms1ee09l... (pi_3TxLFG...)` → status
+  REFUNDED → automatically excluded from judged revenue. No manual
+  bookkeeping needed.
+- Getting there surfaced and fixed, in order: a literal XXXX placeholder
+  in the webhook endpoint URL (no event had EVER been delivered),
+  charge.refunded missing from the endpoint's event list, a signing-secret
+  mismatch (resolved by rotating to a fresh endpoint whose secret went
+  API→Railway with no human copy step — the user's pasted secret turned
+  out to be from a different endpoint on the shared multi-business Stripe
+  account), a webhook event-ordering hazard (fixed in code:
+  refund-state-aware credit purchases), and a stale-variable gotcha
+  (Railway dashboard var edits are staged until a deploy applies them).
+- **Also found on the live charge:** the shared Stripe account's statement
+  descriptor is CONMATES.COM — fixed for one-time purchases via
+  statement_descriptor_suffix FORGEVID. Subscriptions still show the
+  account descriptor; founder decision needed: change the account-level
+  descriptor (relabels the other businesses on this account) or move
+  ForgeVid to its own Stripe account (cleaner long-term, also cleaner for
+  arms-length revenue reporting).
+- An earlier $19 test (8:28 PM, also refunded) predates the endpoint fix;
+  its events expired against the disabled old endpoint. Correct outcome
+  either way: refunded = excluded from revenue whether or not a row
+  exists.
+
+**Platform status: certified working fully — signup, generation, checkout,
+credit grant, revenue recording, and refund reconciliation all proven on
+production with real transactions.** Remaining non-code items unchanged:
+GitHub org billing lock (CI dead), eligibility-docs reconciliation, demo
+video, written submission.
