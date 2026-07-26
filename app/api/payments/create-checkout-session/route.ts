@@ -61,6 +61,11 @@ async function handleCreditPackCheckout(
     success_url: `${process.env.NEXTAUTH_URL}/dashboard?success=true`,
     cancel_url: `${process.env.NEXTAUTH_URL}/dashboard?canceled=true`,
     client_reference_id: session.user.id,
+    // This Stripe account is shared across several businesses, and its
+    // account-level statement descriptor is another brand's — without a
+    // suffix, a ForgeVid customer's bank statement shows a charge from a
+    // site they've never heard of, which is how disputes happen.
+    payment_intent_data: { statement_descriptor_suffix: 'FORGEVID' },
     metadata: {
       type: 'credit_purchase',
       pack: pack.id,
