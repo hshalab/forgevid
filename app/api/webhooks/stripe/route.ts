@@ -68,12 +68,36 @@ export async function POST(request: NextRequest) {
             break;
           }
 
-          await grantCredits({
-            userId: creditUserId,
-            credits,
-            reason,
-            stripeSessionId: session.id,
-          });
+          // Event arrival order is not guaranteed: a refund can be issued
+          // before THIS event is ever delivered (e.g. the original delivery
+          // failed and Stripe retried it after the refund). charge.refunded's
+          // handler can only reconcile a Payment row that exists, so check
+          // the charge's refund state NOW — a refunded purchase grants no
+          // credits and is recorded as REFUNDED from the start, whichever
+          // event happens to land first.
+          let alreadyRefunded = false;
+          try {
+            if (session.payment_intent) {
+              const intent = await stripe.paymentIntents.retrieve(session.payment_intent as string, {
+                expand: ['latest_charge'],
+              });
+              const charge = intent.latest_charge as Stripe.Charge | null;
+              alreadyRefunded = Boolean(charge?.refunded);
+            }
+          } catch (err) {
+            console.error('[Webhook] Could not check refund state, assuming not refunded:', err);
+          }
+
+          if (alreadyRefunded) {
+            console.log(`[Webhook] Session ${session.id} was already refunded — recording REFUNDED, granting no credits`);
+          } else {
+            await grantCredits({
+              userId: creditUserId,
+              credits,
+              reason,
+              stripeSessionId: session.id,
+            });
+          }
 
           try {
             await prisma.payment.create({
@@ -81,7 +105,7 @@ export async function POST(request: NextRequest) {
                 userId: creditUserId,
                 amount: session.amount_total ? session.amount_total / 100 : 0,
                 currency: session.currency || 'usd',
-                status: 'SUCCEEDED',
+                status: alreadyRefunded ? 'REFUNDED' : 'SUCCEEDED',
                 stripePaymentId: (session.payment_intent as string) || session.id,
                 description: `Credit pack: ${session.metadata.pack} (${credits} credits)`,
                 metadata: JSON.stringify({

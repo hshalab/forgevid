@@ -39,7 +39,10 @@ jest.mock('next/headers', () => ({
 }))
 
 jest.mock('@/lib/stripe', () => ({
-  stripe: { webhooks: { constructEvent: jest.fn() } },
+  stripe: {
+    webhooks: { constructEvent: jest.fn() },
+    paymentIntents: { retrieve: jest.fn() },
+  },
 }))
 
 jest.mock('@/lib/prisma', () => ({
@@ -64,9 +67,11 @@ import { headers } from 'next/headers'
 import { POST } from '@/app/api/webhooks/stripe/route'
 import { stripe } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
+import { grantCredits } from '@/lib/credits'
 
 const mockedHeaders = headers as jest.MockedFunction<typeof headers>
 const mockedConstructEvent = stripe.webhooks.constructEvent as jest.MockedFunction<typeof stripe.webhooks.constructEvent>
+const mockedRetrieveIntent = stripe.paymentIntents.retrieve as jest.MockedFunction<typeof stripe.paymentIntents.retrieve>
 const mockedSubscription = prisma.subscription as jest.Mocked<typeof prisma.subscription>
 const mockedPayment = prisma.payment as jest.Mocked<typeof prisma.payment>
 
@@ -291,5 +296,72 @@ describe('Stripe webhook — charge.refunded reconciles revenue', () => {
     expect(response.status).toBe(200)
     expect(mockedPayment.findUnique).not.toHaveBeenCalled()
     expect(mockedPayment.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('Stripe webhook — credit purchase is order-independent with refunds', () => {
+  const mockedGrantCredits = grantCredits as jest.MockedFunction<typeof grantCredits>
+
+  function creditSessionEvent() {
+    return {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_1',
+          mode: 'payment',
+          metadata: { type: 'credit_purchase', pack: 'single', credits: '1', userId: 'user-1' },
+          client_reference_id: 'user-1',
+          payment_intent: 'pi_credit_1',
+          amount_total: 1900,
+          currency: 'usd',
+        },
+      },
+    } as any
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockedPayment.create.mockResolvedValue({} as any)
+  })
+
+  it('grants credits and records SUCCEEDED when the charge is not refunded', async () => {
+    mockedConstructEvent.mockReturnValue(creditSessionEvent())
+    mockedRetrieveIntent.mockResolvedValue({ latest_charge: { refunded: false } } as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedGrantCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', credits: 1, reason: 'purchase_single' }),
+    )
+    expect(mockedPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED' }) }),
+    )
+  })
+
+  it('grants NO credits and records REFUNDED when the charge was refunded before this event arrived', async () => {
+    mockedConstructEvent.mockReturnValue(creditSessionEvent())
+    mockedRetrieveIntent.mockResolvedValue({ latest_charge: { refunded: true } } as any)
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedGrantCredits).not.toHaveBeenCalled()
+    expect(mockedPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'REFUNDED' }) }),
+    )
+  })
+
+  it('proceeds normally (fails open to SUCCEEDED) if the refund-state check itself errors', async () => {
+    mockedConstructEvent.mockReturnValue(creditSessionEvent())
+    mockedRetrieveIntent.mockRejectedValue(new Error('stripe timeout'))
+
+    const response = await POST(reqWithSignature('good-sig'))
+
+    expect(response.status).toBe(200)
+    expect(mockedGrantCredits).toHaveBeenCalled()
+    expect(mockedPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED' }) }),
+    )
   })
 })
