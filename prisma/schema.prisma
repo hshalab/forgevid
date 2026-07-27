@@ -850,8 +850,21 @@ model AdCreative {
   cta                  String?
   aspect               String?
   platform             String
+  /// Set by lib/ad-performance.ts ONLY for a creative with total* data
+  /// imported below — a creative with none keeps whatever a customer set via
+  /// the manual PATCH /api/ad-studio/creatives/[id] endpoint untouched.
   isWinner             Boolean  @default(false)
   roas                 Float?
+  /// Ad spend/impressions/clicks the customer imported from their OWN ad
+  /// platform dashboard (see lib/ad-performance.ts) — never pulled via an API,
+  /// never inferred. LIFE-TO-DATE TOTALS, not a period delta: each import
+  /// REPLACES the previous value (there is no per-period history), so
+  /// importing must always upload the running total, the same way
+  /// GrowthConversion's revenue is already a running lifetime sum.
+  totalSpendCents      Int?
+  totalImpressions     Int?
+  totalClicks          Int?
+  spendUpdatedAt       DateTime?
   notes                String?
   recommendationReason String?
   expectedResult       String?

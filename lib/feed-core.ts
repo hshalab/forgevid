@@ -100,6 +100,8 @@ export function extractPhotos(raw: unknown): string[] {
       const direct = pick(record, [
         'MediaURL', 'MediaUrl', 'Url', 'href', '#text', 'Photo', 'Image',
         'image_link', 'additional_image_link', 'ImageUrl', 'src',
+        // url_standard/url_zoom: BigCommerce's catalog Image object field names.
+        'url_standard', 'url_zoom',
       ]);
       if (direct) visit(direct);
       else Object.values(record).forEach(visit);

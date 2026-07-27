@@ -3,8 +3,9 @@ import { getServerSession } from 'next-auth'
 import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { splitCsvLine } from '@/lib/listing-brief'
 import { appendEvidence } from '@/lib/evidence-ledger'
+import { recomputeCampaignPerformance } from '@/lib/ad-performance'
+import { assertHeaders, ownedCreativeCampaigns, parseCsvBody, CsvImportError } from '@/lib/csv-import'
 
 const rowSchema = z.object({
   creativeId: z.string().min(1),
@@ -19,22 +20,19 @@ const rowSchema = z.object({
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-  const csv = await request.text()
-  if (Buffer.byteLength(csv, 'utf8') > 2_000_000) {
-    return NextResponse.json({ error: 'CSV must be 2 MB or smaller' }, { status: 413 })
+
+  let headers: string[], cellRows: string[][]
+  try {
+    ;({ headers, rows: cellRows } = parseCsvBody(await request.text()))
+    assertHeaders(headers, ['creativeId', 'kind', 'occurredAt', 'externalId'])
+  } catch (error) {
+    if (error instanceof CsvImportError) return NextResponse.json({ error: error.message }, { status: error.status })
+    throw error
   }
-  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim())
-  if (lines.length < 2 || lines.length > 1001) {
-    return NextResponse.json({ error: 'CSV requires a header and 1–1000 rows' }, { status: 400 })
-  }
-  const headers = splitCsvLine(lines[0]).map((value) => value.trim())
-  const required = ['creativeId', 'kind', 'occurredAt', 'externalId']
-  if (required.some((name) => !headers.includes(name))) {
-    return NextResponse.json({ error: `Required columns: ${required.join(', ')}` }, { status: 400 })
-  }
+
   const rows = []
-  for (let index = 0; index < lines.length - 1; index += 1) {
-    const cells = splitCsvLine(lines[index + 1])
+  for (let index = 0; index < cellRows.length; index += 1) {
+    const cells = cellRows[index]
     const value = (name: string) => cells[headers.indexOf(name)]?.trim() || ''
     const dollars = value('revenueUsd')
     const parsed = rowSchema.safeParse({
@@ -51,14 +49,16 @@ export async function POST(request: NextRequest) {
     }
     rows.push(parsed.data)
   }
+
   const creativeIds = [...new Set(rows.map((row) => row.creativeId))]
-  const owned = await prisma.adCreative.findMany({
-    where: { userId: session.user.id, id: { in: creativeIds } },
-    select: { id: true },
-  })
-  if (owned.length !== creativeIds.length) {
-    return NextResponse.json({ error: 'One or more creatives are invalid or not owned by this account' }, { status: 403 })
+  let campaignByCreative: Map<string, string>
+  try {
+    campaignByCreative = await ownedCreativeCampaigns(session.user.id, creativeIds)
+  } catch (error) {
+    if (error instanceof CsvImportError) return NextResponse.json({ error: error.message }, { status: error.status })
+    throw error
   }
+
   const result = await prisma.growthConversion.createMany({
     data: rows.map((row) => ({
       ...row,
@@ -80,5 +80,9 @@ export async function POST(request: NextRequest) {
       externalIds: rows.map((row) => row.externalId),
     },
   })
+  // Revenue changed for every campaign touched by this import.
+  for (const campaignId of new Set(campaignByCreative.values())) {
+    await recomputeCampaignPerformance(campaignId)
+  }
   return NextResponse.json({ imported: result.count, skipped: rows.length - result.count })
 }

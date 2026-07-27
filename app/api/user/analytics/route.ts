@@ -41,7 +41,7 @@ export async function GET() {
         getUserPlan(userId),
         prisma.adCreative.findMany({
           where: { userId },
-          select: { id: true, label: true, campaignId: true },
+          select: { id: true, label: true, campaignId: true, roas: true, isWinner: true, totalSpendCents: true },
         }),
         prisma.impactAssumption.findUnique({ where: { userId } }),
         prisma.growthConversion.findMany({

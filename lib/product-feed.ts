@@ -7,11 +7,16 @@
  * narrated, captioned ad with its price burned in — then the ad-variation engine
  * multiplies the winners into hooks and placements for testing.
  *
- * Handles the two feeds a store actually has:
+ * Handles the feeds a store actually has:
  *  - Google Merchant Center (XML, RSS 2.0 with the g: namespace: g:title,
  *    g:price, g:image_link, ...). fast-xml-parser drops the prefix, so we alias
  *    both `g:title` and `title`.
  *  - Shopify / generic JSON (`{ products: [...] }` or a bare array).
+ *  - WooCommerce's REST API product object (`name`, `regular_price`,
+ *    `sale_price`, `short_description`, `images[].src`) and BigCommerce's
+ *    catalog Product object (`name`, `price`, `calculated_price`,
+ *    `images[].url_standard`) — both already match most of the Shopify/generic
+ *    aliases below; only their price/description field names differ.
  *
  * Nothing is invented: a product with no image is rejected by name. The parser
  * is PURE and shares lib/feed-core with real estate and automotive.
@@ -52,9 +57,12 @@ export class ProductParseError extends Error {
 const ALIASES = {
   ref: ['id', 'g:id', 'sku', 'productId', 'product_id', 'variant_id', 'ref', 'mpn'],
   title: ['title', 'g:title', 'name', 'productTitle', 'product_title'],
-  price: ['price', 'g:price', 'sale_price', 'g:sale_price', 'salePrice', 'amount'],
+  // regular_price/calculated_price: WooCommerce's and BigCommerce's own names
+  // for list price when it differs from the current selling price.
+  price: ['price', 'g:price', 'sale_price', 'g:sale_price', 'salePrice', 'amount', 'regular_price', 'calculated_price'],
   brand: ['brand', 'g:brand', 'vendor', 'manufacturer'],
-  description: ['description', 'g:description', 'body_html', 'bodyHtml', 'summary', 'details'],
+  // short_description: WooCommerce's excerpt field, separate from the full description.
+  description: ['description', 'g:description', 'body_html', 'bodyHtml', 'summary', 'details', 'short_description'],
   media: [
     'image_link', 'g:image_link', 'additional_image_link', 'g:additional_image_link',
     'images', 'image', 'featured_image', 'imageUrl', 'photos', 'media', 'src',

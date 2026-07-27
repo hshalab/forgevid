@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { appendEvidence } from '@/lib/evidence-ledger'
+import { recomputeCampaignPerformance } from '@/lib/ad-performance'
 
 const conversionSchema = z.object({
   creativeId: z.string().min(1),
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
   const creative = await prisma.adCreative.findFirst({
     where: { id: parsed.data.creativeId, userId: ownerId },
-    select: { id: true },
+    select: { id: true, campaignId: true },
   })
   if (!creative) return NextResponse.json({ error: 'Creative not found' }, { status: 404 })
 
@@ -85,5 +86,8 @@ export async function POST(request: NextRequest) {
       occurredAt: conversion.occurredAt.toISOString(),
     },
   })
+  // Revenue just changed for this creative — ROAS/isWinner across the whole
+  // campaign may have too.
+  await recomputeCampaignPerformance(creative.campaignId)
   return NextResponse.json({ conversion }, { status: 201 })
 }

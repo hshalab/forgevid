@@ -24,6 +24,7 @@ jest.mock('next/server', () => {
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
 jest.mock('@/lib/evidence-ledger', () => ({ appendEvidence: jest.fn() }))
+jest.mock('@/lib/ad-performance', () => ({ recomputeCampaignPerformance: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     adCreative: { findFirst: jest.fn() },
@@ -34,11 +35,13 @@ jest.mock('@/lib/prisma', () => ({
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { recomputeCampaignPerformance } from '@/lib/ad-performance'
 import { GET, POST } from '@/app/api/growth-operator/conversions/route'
 
 const session = getServerSession as jest.MockedFunction<typeof getServerSession>
 const creative = prisma.adCreative as jest.Mocked<typeof prisma.adCreative>
 const conversions = prisma.growthConversion as jest.Mocked<typeof prisma.growthConversion>
+const mockedRecompute = recomputeCampaignPerformance as jest.Mock
 
 function request(body: unknown) {
   return new NextRequest('http://localhost/api/growth-operator/conversions', {
@@ -51,7 +54,7 @@ describe('Growth conversion attribution', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     session.mockResolvedValue({ user: { id: 'user-1' } } as any)
-    creative.findFirst.mockResolvedValue({ id: 'creative-1' } as any)
+    creative.findFirst.mockResolvedValue({ id: 'creative-1', campaignId: 'campaign-1' } as any)
     conversions.findFirst.mockResolvedValue(null)
     conversions.create.mockResolvedValue({
       id: 'conversion-1',
@@ -106,6 +109,8 @@ describe('Growth conversion attribution', () => {
         contactRef: 'order-42',
       }),
     })
+    // New revenue can change ROAS/isWinner across the whole campaign.
+    expect(mockedRecompute).toHaveBeenCalledWith('campaign-1')
   })
 
   it('deduplicates an imported external conversion', async () => {
