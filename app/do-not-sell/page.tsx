@@ -21,7 +21,7 @@ export default function DoNotSellPage() {
               We do not sell personal information. You may still opt-out of certain data sharing used for targeted advertising.
             </p>
             <p>
-              To opt-out, email privacy@forgevid.com with subject “CCPA Opt-Out” or adjust cookie preferences via the cookie banner.
+              To opt-out, email krystinvestments@gmail.com with subject “CCPA Opt-Out” or adjust cookie preferences via the cookie banner.
             </p>
           </CardContent>
         </Card>

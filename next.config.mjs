@@ -25,6 +25,7 @@ function buildExternalRewrites() {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  poweredByHeader: false,
   // Emit a self-contained server bundle (.next/standalone) so the Docker runtime
   // stage can `COPY .next/standalone` and run `node server.js` without node_modules.
   // Required by the Dockerfile; do NOT remove.
@@ -105,6 +106,12 @@ const nextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
         ]
+      },
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+        ],
       },
       // CDN cache headers for static assets
       {

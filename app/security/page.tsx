@@ -30,7 +30,7 @@ export default function SecurityPage() {
           <CardHeader><CardTitle>Responsible Disclosure</CardTitle></CardHeader>
           <CardContent>
             <p>
-              If you believe you’ve found a security vulnerability, please email security@forgevid.com with details and a way to reproduce.
+              If you believe you’ve found a security vulnerability, please email krystinvestments@gmail.com with details and a way to reproduce.
               We will acknowledge, investigate, and remediate as necessary.
             </p>
           </CardContent>

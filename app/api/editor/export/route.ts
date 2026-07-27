@@ -59,7 +59,13 @@ async function handlePost(request: NextRequest) {
     );
     const assets = assetIds.length
       ? await prisma.mediaAsset.findMany({
-          where: { id: { in: assetIds } },
+          where: {
+            id: { in: assetIds },
+            OR: [
+              { uploadedById: session.user.id },
+              { uploadedById: null, isPublic: true },
+            ],
+          },
           select: { id: true, url: true },
         })
       : [];
@@ -223,4 +229,3 @@ async function handlePost(request: NextRequest) {
 }
 
 export const POST = securityConfigs.authenticated(handlePost);
-

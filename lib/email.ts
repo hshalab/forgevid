@@ -19,6 +19,7 @@ const transporter = nodemailer.createTransport({
 
 const FROM_ADDRESS = process.env.SMTP_FROM || 'ForgeVid <noreply@forgevid.com>';
 const APP_URL = process.env.NEXTAUTH_URL || 'https://forgevid.com';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'krystinvestments@gmail.com';
 
 // ─── Template Helpers ──────────────────────────────────────────────
 
@@ -254,4 +255,38 @@ export async function sendGrowthOperatorEmail(to: string, name: string, count: n
     </div>`,
   )
   return sendEmail(to, `${count} ForgeVid Growth Operator recommendation${count === 1 ? '' : 's'} ready`, html)
+}
+
+export async function sendSupportTicketNotification(ticket: {
+  id: string;
+  subject: string;
+  description: string;
+  priority: string;
+  category: string;
+  reporterName?: string | null;
+  reporterEmail?: string | null;
+}): Promise<boolean> {
+  const safeSubject = ticket.subject.replace(/[\r\n]+/g, ' ').trim();
+  const html = baseLayout(
+    'New ForgeVid support ticket',
+    `<div class="card">
+      <h1>New support ticket</h1>
+      <p><strong>${escapeHtml(safeSubject)}</strong></p>
+      <p class="meta">
+        <strong>Ticket:</strong> ${escapeHtml(ticket.id)}<br />
+        <strong>Priority:</strong> ${escapeHtml(ticket.priority)}<br />
+        <strong>Category:</strong> ${escapeHtml(ticket.category)}<br />
+        <strong>Customer:</strong> ${escapeHtml(ticket.reporterName || 'Not provided')}<br />
+        <strong>Email:</strong> ${escapeHtml(ticket.reporterEmail || 'Not provided')}
+      </p>
+      <hr class="divider" />
+      <p style="white-space: pre-wrap;">${escapeHtml(ticket.description)}</p>
+    </div>`,
+  );
+
+  return sendEmail(
+    SUPPORT_EMAIL,
+    `[ForgeVid Support][${ticket.priority.toUpperCase()}] ${safeSubject}`,
+    html,
+  );
 }

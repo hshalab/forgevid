@@ -74,7 +74,7 @@ ForgeVid is built for enterprise and regulated industries, with a strong focus o
 - **SOC 2 Certification**: Enterprise-grade security standards (in progress/finalized as applicable)
 - **Access Controls**: Role-based access (RBAC), SSO, and multi-factor authentication
 - **Legal Coverage**: All content, trademarks, and intellectual property are protected under applicable laws. Use of this platform is subject to the [Terms of Service](./docs/legal/terms.md), [Privacy Policy](./docs/legal/privacy.md), and [Compliance Notices](./docs/legal/compliance.md).
-- For legal or compliance inquiries, contact [legal@forgevid.com](mailto:legal@forgevid.com).
+- For legal, compliance, security, or support inquiries, contact [krystinvestments@gmail.com](mailto:krystinvestments@gmail.com).
 **Competitive Advantages**: ForgeVid stands out with emotion-driven video adaptation, generative interactive videos, AR/VR editing roadmap, blockchain-based content provenance, and self-optimizing campaigns. Competes with and surpasses Runway, Synthesia, Descript, and Canva in personalization, interactivity, and enterprise features.
 
 ## Tech Stack
@@ -206,7 +206,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and code standard
 
 ---
 **Legal Disclaimer:**
-ForgeVid is a product of Kryst Investments LLC. All content, trademarks, and intellectual property are protected under applicable laws. Use of this platform is subject to the terms, privacy policy, and legal notices provided. For legal inquiries, contact legal@forgevid.com.
+ForgeVid is a product of Kryst Investments LLC. All content, trademarks, and intellectual property are protected under applicable laws. Use of this platform is subject to the terms, privacy policy, and legal notices provided. For legal or support inquiries, contact krystinvestments@gmail.com.
 \`\`\`
 
 ```json file="" isHidden

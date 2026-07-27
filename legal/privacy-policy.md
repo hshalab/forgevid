@@ -83,7 +83,7 @@ actions and consents.
 and to **limit** use of sensitive data; we honor **opt-out of sale/sharing** (we do not sell/share);
 and we will not discriminate for exercising rights. **EEA/UK (GDPR):** you have rights of **access,
 rectification, erasure, restriction, portability, objection**, and to **withdraw consent** and **lodge
-a complaint** with your supervisory authority. To exercise any right, contact **[privacy@forgevid.com]**;
+a complaint** with your supervisory authority. To exercise any right, contact **krystinvestments@gmail.com**;
 we verify identity and respond within the legally required time. **Authorized agents** may submit
 requests on your behalf. If you are a data subject whose data was submitted by a Customer, we will
 refer your request to that Customer (the controller).
@@ -113,4 +113,4 @@ notice.
 
 ## 14. Contact
 **Kryst Investments LLC · [address]**
-Privacy requests: **[privacy@forgevid.com]** · EU/UK representative: **[if applicable]** · DPO: **[if applicable]**
+Privacy requests and DPO contact: **krystinvestments@gmail.com** · EU/UK representative: **[if applicable]**

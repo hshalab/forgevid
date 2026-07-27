@@ -50,10 +50,10 @@ We give advance notice of price increases (at least **30 days**, or as required 
 your next renewal, and you may cancel beforehand.
 
 ## 7. Chargebacks
-If you believe a charge is wrong, **please contact us first at [billing@forgevid.com]** — we usually
+If you believe a charge is wrong, **please contact us first at krystinvestments@gmail.com** — we usually
 resolve it faster than a bank dispute. Filing a chargeback without contacting us may result in
 suspension pending resolution.
 
 ## 8. How to request a refund
-Email **[billing@forgevid.com]** from your account email with your account, the charge date, and the
+Email **krystinvestments@gmail.com** from your account email with your account, the charge date, and the
 reason. We aim to respond within **[5] business days**.

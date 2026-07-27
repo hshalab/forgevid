@@ -144,7 +144,7 @@ material changes, provide reasonable notice (e.g., email or in-product). Continu
 effective date means you accept the changes.
 
 ## 15. Notices; assignment; entire agreement
-15.1 Notices to you may be sent to your account email; notices to us go to **[legal@forgevid.com]**.
+15.1 Notices to you may be sent to your account email; notices to us go to **krystinvestments@gmail.com**.
 15.2 You may not assign these Terms without our consent; we may assign them (e.g., in a merger or sale).
 15.3 These Terms (with the Privacy Policy and Refund Policy) are the entire agreement between us.
 15.4 **Severability & waiver:** if a provision is unenforceable, the rest remains in effect; no waiver
@@ -152,7 +152,7 @@ is implied by delay. 15.5 **Force majeure:** neither party is liable for delays 
 
 ## 16. Dispute resolution — arbitration & class waiver
 **PLEASE READ THIS SECTION CAREFULLY.**
-16.1 **Informal resolution first.** Before filing, contact **[legal@forgevid.com]** and give us 30 days
+16.1 **Informal resolution first.** Before filing, contact **krystinvestments@gmail.com** and give us 30 days
 to resolve the dispute.
 16.2 **Binding arbitration.** Any dispute not resolved informally will be settled by **binding
 arbitration** administered by the **[American Arbitration Association (AAA)]** under its Consumer/
@@ -162,7 +162,7 @@ be entered in any court of competent jurisdiction.
 16.3 **Class-action waiver.** **Disputes will be brought only in an individual capacity — no class,
 collective, or representative actions, and no consolidation** unless both parties agree.
 16.4 **30-day opt-out.** You may opt out of arbitration and the class waiver by emailing
-**[legal@forgevid.com]** within **30 days** of first accepting these Terms, stating your name, account,
+**krystinvestments@gmail.com** within **30 days** of first accepting these Terms, stating your name, account,
 and intent to opt out. Opting out does not affect the rest of these Terms.
 16.5 If the class-action waiver is found unenforceable, the arbitration provision (except the small-
 claims carve-out) is void for that dispute.
@@ -173,4 +173,4 @@ rules. Subject to Section 16, the exclusive venue for any permitted court action
 federal courts located in **[County, State]**, and you consent to their jurisdiction.
 
 ## 18. Contact
-**Kryst Investments LLC · [address] · [legal@forgevid.com]**
+**Kryst Investments LLC · [address] · krystinvestments@gmail.com**

@@ -166,13 +166,13 @@ export default function LegalHub() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <h4 className="font-semibold mb-2">General Legal Inquiries</h4>
-                <p className="text-slate-600 mb-2">Email: legal@forgevid.com</p>
+                <p className="text-slate-600 mb-2">Email: krystinvestments@gmail.com</p>
                 <p className="text-slate-600">Response time: 1-2 business days</p>
               </div>
               <div>
                 <h4 className="font-semibold mb-2">Privacy & Data Protection</h4>
-                <p className="text-slate-600 mb-2">Email: privacy@forgevid.com</p>
-                <p className="text-slate-600">DPO: dpo@forgevid.com</p>
+                <p className="text-slate-600 mb-2">Email: krystinvestments@gmail.com</p>
+                <p className="text-slate-600">DPO: krystinvestments@gmail.com</p>
               </div>
             </div>
             <div className="mt-6 p-4 bg-slate-50 rounded-lg">
@@ -187,7 +187,7 @@ export default function LegalHub() {
       {/* Legal Disclaimer */}
       <div className="container mx-auto px-4 py-4">
         <div className="bg-slate-100 p-4 rounded-lg text-xs text-slate-600">
-          <strong>Legal Disclaimer:</strong> ForgeVid is a product of Kryst Investments LLC. All content, trademarks, and intellectual property are protected under applicable laws. Use of this platform is subject to the terms, privacy policy, and legal notices provided. For legal inquiries, contact legal@forgevid.com.
+          <strong>Legal Disclaimer:</strong> ForgeVid is a product of Kryst Investments LLC. All content, trademarks, and intellectual property are protected under applicable laws. Use of this platform is subject to the terms, privacy policy, and legal notices provided. For legal inquiries, contact krystinvestments@gmail.com.
         </div>
       </div>
               </p>

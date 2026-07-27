@@ -11,7 +11,6 @@
  * Failures are surfaced, never papered over with someone else's demo video.
  */
 
-import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -43,6 +42,7 @@ import {
   paddedClipDurations,
   type TransitionConfig,
 } from './transitions';
+import { safeFetch } from './safe-fetch';
 import { resolveFfmpegPath, supportsFilter } from './ffmpeg-env';
 import { buildKenBurnsFilter, directionForScene } from './ken-burns';
 import type { UserMediaItem } from './user-media';
@@ -630,14 +630,13 @@ async function downloadFile(url: string, filename: string): Promise<Materialized
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
   const filepath = path.join(tempDir, filename);
-  const response = await axios.get(url, { responseType: 'stream' });
-  const writer = fs.createWriteStream(filepath);
-  response.data.pipe(writer);
-
-  return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve({ path: filepath, downloaded: true }));
-    writer.on('error', reject);
+  const response = await safeFetch(url, {
+    maxBytes: 250 * 1024 * 1024,
+    timeoutMs: 30_000,
+    acceptTypes: ['image', 'video', 'audio', 'application/octet-stream'],
   });
+  fs.writeFileSync(filepath, response.body);
+  return { path: filepath, downloaded: true };
 }
 
 /**

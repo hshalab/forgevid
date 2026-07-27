@@ -20,9 +20,9 @@
  * audio tracks. Multi-video-track layering (picture-in-picture) is not composited.
  */
 
-import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import { safeFetch } from './safe-fetch';
 import {
   buildWatermarkFilter,
   escapeDrawText,
@@ -150,13 +150,12 @@ async function materialize(source: string, hint: string): Promise<string> {
   }
 
   const filepath = path.join(tempDir(), `asset_${Date.now()}_${hint}`);
-  const response = await axios.get(source, { responseType: 'stream' });
-  const writer = fs.createWriteStream(filepath);
-  response.data.pipe(writer);
-  await new Promise<void>((resolve, reject) => {
-    writer.on('finish', () => resolve());
-    writer.on('error', reject);
+  const response = await safeFetch(source, {
+    maxBytes: 250 * 1024 * 1024,
+    timeoutMs: 30_000,
+    acceptTypes: ['image', 'video', 'audio', 'application/octet-stream'],
   });
+  fs.writeFileSync(filepath, response.body);
   return filepath;
 }
 

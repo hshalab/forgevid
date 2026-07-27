@@ -14,6 +14,7 @@
  */
 
 import { prisma } from './prisma';
+import { safeFetch } from './safe-fetch';
 import { hasLlmKey } from './ai/llm';
 import { assembleVideo, generateVideoWithScenes, renderDims, spokenLine } from './video-generator';
 import type { AspectRatio, ResolvedScene } from './video-generator';
@@ -146,12 +147,15 @@ async function audioAssetForVideo(
   }
   if (/^https?:\/\//.test(asset.url)) {
     try {
-      const res = await fetch(asset.url);
-      if (!res.ok) return null;
+      const res = await safeFetch(asset.url, {
+        maxBytes: 100 * 1024 * 1024,
+        timeoutMs: 30_000,
+        acceptTypes: ['audio', 'video', 'application/octet-stream'],
+      });
       const dir = path.join(process.cwd(), 'public', 'temp');
       fs.mkdirSync(dir, { recursive: true });
       const p = path.join(dir, `narration_${Date.now()}.audio`);
-      fs.writeFileSync(p, Buffer.from(await res.arrayBuffer()));
+      fs.writeFileSync(p, res.body);
       return p;
     } catch {
       return null;

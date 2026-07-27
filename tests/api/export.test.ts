@@ -103,6 +103,17 @@ describe('Export API', () => {
       expect(data.success).toBe(true);
       expect(data.exportId).toBeDefined();
       expect(data.status).toBe('processing');
+      expect(mockPrisma.mediaAsset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: { in: ['asset-1'] },
+            OR: [
+              { uploadedById: 'user-123' },
+              { uploadedById: null, isPublic: true },
+            ],
+          },
+        }),
+      );
     });
 
     it('should handle 4K export settings', async () => {
