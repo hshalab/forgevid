@@ -22,6 +22,8 @@ export const RATES = {
   renderPerMinute: 0.01,
   /** HeyGen-class avatar rendering, per minute of output. */
   avatarPerMinute: 0.5,
+  /** HeyGen video-translate (dub + lip-sync an existing video), per minute of source. */
+  dubPerMinute: 2.0,
 };
 
 export interface CostInputs {
@@ -30,6 +32,7 @@ export interface CostInputs {
   whisperSeconds?: number;
   renderSeconds?: number;
   avatarSeconds?: number;
+  dubSeconds?: number;
 }
 
 export interface CostBreakdown extends Required<CostInputs> {
@@ -42,13 +45,15 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
   const whisperSeconds = Math.max(0, inputs.whisperSeconds ?? 0);
   const renderSeconds = Math.max(0, inputs.renderSeconds ?? 0);
   const avatarSeconds = Math.max(0, inputs.avatarSeconds ?? 0);
+  const dubSeconds = Math.max(0, inputs.dubSeconds ?? 0);
 
   const totalUsd =
     (gptTokens / 1000) * RATES.gptPer1kTokens +
     (ttsChars / 1000) * RATES.ttsPer1kChars +
     (whisperSeconds / 60) * RATES.whisperPerMinute +
     (renderSeconds / 60) * RATES.renderPerMinute +
-    (avatarSeconds / 60) * RATES.avatarPerMinute;
+    (avatarSeconds / 60) * RATES.avatarPerMinute +
+    (dubSeconds / 60) * RATES.dubPerMinute;
 
   return {
     gptTokens,
@@ -56,6 +61,7 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
     whisperSeconds,
     renderSeconds,
     avatarSeconds,
+    dubSeconds,
     totalUsd: Number(totalUsd.toFixed(6)),
   };
 }

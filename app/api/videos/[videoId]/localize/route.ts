@@ -130,7 +130,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ videoId:
         generation: { stage: 'queued', percent: 5, updatedAt: new Date().toISOString() },
         ...(quota.usePurchasedCredit ? { paidCredit: true } : {}),
         request: genInput,
-        localizedFrom: params.videoId,
+        // Shared "derived from" convention with the dub route
+        // (app/api/videos/[videoId]/dub/route.ts) — one metadata key for
+        // both variant types rather than each feature inventing its own.
+        variantType: 'localize',
+        sourceVideoId: params.videoId,
       }),
     },
     select: { id: true },

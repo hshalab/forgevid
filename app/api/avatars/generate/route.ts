@@ -4,10 +4,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { allowsAvatars } from '@/lib/plan';
-import { checkGenerationQuota, settleGenerationEntitlement, refundGenerationUsage } from '@/lib/quota';
-import { refundCreditForVideo } from '@/lib/credits';
-import { estimateGenerationCost, recordGenerationCost } from '@/lib/cost-ledger';
-import { setStage } from '@/lib/generation-pipeline';
+import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
+import { pollProviderJobToCompletion } from '@/lib/provider-job-poll';
 import {
   createAvatarVideo,
   getAvatarVideoStatus,
@@ -35,64 +33,10 @@ const bodySchema = z.object({
   duration: z.number().int().min(5).max(600).default(60),
 });
 
-const POLL_INTERVAL_MS = 5000;
-const POLL_DEADLINE_MS = 15 * 60 * 1000;
 // HeyGen bills ~$0.50/minute — a single purchased credit ($19 for one video,
 // or ~$1.16-1.50 amortized in a top-up) would be a straight loss on anything
 // past a couple minutes. Avatar renders cost 2 purchased credits.
 const AVATAR_CREDIT_COST = 2;
-
-async function pollUntilDone(videoId: string, providerVideoId: string, userId: string, script: string, duration: number) {
-  const deadline = Date.now() + POLL_DEADLINE_MS;
-  try {
-    await prisma.video.update({ where: { id: videoId }, data: { status: 'PROCESSING' } });
-    await setStage(videoId, 'assembling');
-
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-      const status = await getAvatarVideoStatus(providerVideoId);
-
-      if (status.status === 'completed' && status.videoUrl) {
-        await prisma.video.update({
-          where: { id: videoId },
-          data: { status: 'COMPLETED', url: status.videoUrl, fileUrl: status.videoUrl },
-        });
-        await setStage(videoId, 'done', { videoUrl: status.videoUrl, provider: 'heygen' });
-        await recordGenerationCost({
-          userId,
-          videoId,
-          prompt: script,
-          succeeded: true,
-          breakdown: estimateGenerationCost({ avatarSeconds: duration }),
-        });
-        return;
-      }
-      if (status.status === 'failed') {
-        throw new Error(status.error ?? 'Avatar render failed');
-      }
-    }
-    throw new Error('Avatar render timed out after 15 minutes');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Avatar render failed';
-    await prisma.video
-      .update({ where: { id: videoId }, data: { status: 'FAILED' } })
-      .catch(() => {});
-    await setStage(videoId, 'failed', { error: message }).catch(() => {});
-    // A failed avatar render must not silently eat quota or purchased
-    // credits — give both back, same as generation-pipeline.ts's runGeneration
-    // does for the standard pipeline (this route has its own failure path
-    // since it polls a provider instead of running local ffmpeg).
-    await refundGenerationUsage(videoId).catch(() => {});
-    await refundCreditForVideo(videoId).catch(() => {});
-    await recordGenerationCost({
-      userId,
-      videoId,
-      prompt: script,
-      succeeded: false,
-      breakdown: estimateGenerationCost({}),
-    }).catch(() => {});
-  }
-}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -172,7 +116,14 @@ export async function POST(req: NextRequest) {
     await settleGenerationEntitlement(userId, video.id, input.duration, quota);
 
     // Polling is lightweight (no local ffmpeg), so no render slot needed.
-    void pollUntilDone(video.id, providerVideoId, userId, input.script, input.duration);
+    void pollProviderJobToCompletion({
+      videoId: video.id,
+      userId,
+      providerName: 'heygen',
+      prompt: input.script,
+      checkStatus: () => getAvatarVideoStatus(providerVideoId),
+      successCost: () => ({ avatarSeconds: input.duration }),
+    });
 
     return NextResponse.json({
       success: true,

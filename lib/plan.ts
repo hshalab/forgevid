@@ -69,6 +69,16 @@ export function allowsAvatars(plan: Plan): boolean {
   return plan === 'pro' || plan === 'enterprise' || plan === 'custom';
 }
 
+/**
+ * Video dubbing (HeyGen Video Translate) bills per source minute at roughly
+ * 4x an avatar render — a distinct gate from allowsAvatars even though they
+ * currently agree on every plan, so dub access can be priced/gated
+ * differently later without an entangled edit to an avatar-named function.
+ */
+export function allowsVideoDubbing(plan: Plan): boolean {
+  return plan === 'pro' || plan === 'enterprise' || plan === 'custom';
+}
+
 /** Custom branding (logo overlay, intro/outro) is a paid feature. */
 export function allowsCustomBranding(plan: Plan): boolean {
   return isPaidPlan(plan);
