@@ -1,0 +1,42 @@
+Subject: Written eligibility determination requested — ForgeVid pre-existing prototype and hackathon-period rebuild
+
+Hello XPRIZE/Devpost team,
+
+I am preparing ForgeVid (https://www.forgevid.com) for the Build with Gemini
+XPRIZE and would like a written eligibility determination before submitting.
+
+I want to disclose the development history completely. The repository contains
+a substantial ForgeVid-specific predecessor snapshot dated October 21, 2025.
+During the submission period, beginning July 7, 2026, I materially rebuilt the
+platform, made it functional and deployable, integrated Gemini into production,
+created new inventory-to-video and bilingual campaign workflows, launched it on
+Railway, and began customer-development work.
+
+I have preserved the earlier branch and am not attempting to delete, rewrite,
+recommit, or conceal the pre-existing work. The attached one-page timeline
+identifies:
+
+- the October 2025 components;
+- the Git-history gap around May 19;
+- the hackathon-period additions;
+- the currently verifiable production-deployment timeline;
+- the customer and revenue evidence currently available; and
+- the exact eligibility question.
+
+Could you please confirm whether ForgeVid may qualify under these circumstances?
+If it may qualify, please tell me what component-level disclosure, repository
+access, or supporting evidence you would like included with the submission.
+
+I can provide the complete repository, both Git histories, commit-level changes,
+Railway deployment records, provider usage, and financial/customer documentation
+for verification.
+
+Thank you,
+
+[FULL LEGAL NAME]
+[TEAM OR ORGANIZATION]
+[DEVPOST ACCOUNT EMAIL]
+[DEVPOST PROFILE OR PROJECT URL]
+[PHONE, OPTIONAL]
+
+Attachment: ForgeVid — One-Page Development and Launch Timeline

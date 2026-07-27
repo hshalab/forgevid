@@ -1,3 +1,16 @@
+> **SUPERSEDED 2026-07-27 — DO NOT SEND THIS DOCUMENT.** Its central claim
+> ("the current repo has no commit before 2026-07-07... commits before
+> 2026-05-19: 0") is **factually wrong**: `origin/master` — GitHub's default
+> branch for this repo — is commit `205e2236f` dated 2025-10-21, a
+> 1,459-file, explicitly `"name": "forgevid"`-branded snapshot with Prisma
+> migrations dated back to 2025-09-22. That branch was reachable the whole
+> time this report was written; it was simply not checked. Verified directly
+> against `git for-each-ref` / `git show` / `git ls-tree`, not re-derived
+> from this file. Use `evidence/XPRIZE-ELIGIBILITY-DISCLOSURE.md` and
+> `evidence/XPRIZE-ELIGIBILITY-EMAIL.txt` instead — those correctly disclose
+> the October 2025 predecessor. Kept here only as an audit trail of the
+> mistake, not as a source of truth.
+
 # ForgeVid — Provenance Report
 
 Prepared 2026-07-25 for XPRIZE hackathon eligibility review (COMP-001).

@@ -1,3 +1,12 @@
+SUPERSEDED 2026-07-27 — DO NOT SEND THIS DRAFT.
+It understates the pre-existing code as "no verifiable record of the exact
+date" / "non-functional boilerplate." That's inaccurate: origin/master
+(GitHub's default branch) is a dated, ForgeVid-branded commit (2025-10-21,
+1,459 files, package.json name "forgevid"), with Prisma migrations back to
+2025-09-22 — all independently verifiable by anyone who opens the repo.
+Use evidence/XPRIZE-ELIGIBILITY-EMAIL.txt instead, which discloses this
+directly. Kept here only as an audit trail, not a source of truth.
+
 Subject: Eligibility question — pre-existing codebase, rebuilt/launched during the competition window
 
 Hi [organizer name / XPRIZE-Devpost support],
