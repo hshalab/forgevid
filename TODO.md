@@ -1117,3 +1117,134 @@ credit grant, revenue recording, and refund reconciliation all proven on
 production with real transactions.** Remaining non-code items unchanged:
 GitHub org billing lock (CI dead), eligibility-docs reconciliation, demo
 video, written submission.
+
+## 2026-07-27 — the "what ForgeVid needs to get ahead" roadmap: triaged, shipped what's real, flagged what isn't
+
+Handed a 10-point strategic roadmap (frontier video-model router, automated
+quality gate, multilingual localization, direct feed integrations, ad-platform
+measurement, per-vertical intelligence, template quality, faster editor,
+enterprise trust, a benchmark dataset) with the instruction to fully implement
+all of it. Several items need things no amount of coding substitutes for —
+paid model-provider keys, OAuth apps registered under this business with
+Shopify/HubSpot/Salesforce/Google, business-verified ad accounts, a SOC 2 audit
+firm. Built everything that was actually in reach; the rest is itemized below,
+not faked.
+
+**Shipped, tested (301→326 tests as features landed), tsc + full `npm run
+build` clean at every commit, pushed to both `xprize-launch` and `main`:**
+
+- **Automated quality gate** (`lib/quality-gate.ts`): every render is checked
+  before upload — black/frozen frames, missing or mostly-silent audio, wrong
+  duration/resolution — by re-running the already-resolved ffmpeg binary
+  against the local file (no ffprobe ships with this project; parses ffmpeg's
+  own `-i` banner and detection-filter logs instead). When black/frozen frames
+  localize to specific scenes, `generateVideoWithScenes` re-picks just those
+  scenes' stock footage and re-assembles once — never touching a scene backed
+  by the user's own uploaded media. Report persisted onto `Video.metadata.
+  qualityGate`. Reviewed via `/simplify` (4 agents): converted `spawnSync` →
+  async `execFile` after the efficiency pass flagged that a synchronous spawn
+  in the inline (no-Redis) fallback path blocks the whole Next.js process's
+  event loop, not just the render being checked; merged duplicate
+  black/freeze-detection code into one helper; consolidated three separate
+  copies of the same ffmpeg-duration-parsing regex (this file,
+  `video-generator.ts`, `voiceover.ts`) into `ffmpeg-env.ts`'s
+  `parseDurationSeconds`.
+- **Free VIN decoding** (`lib/vin-decoder.ts`, NHTSA's public vPIC API, no
+  key): backfills missing year/make/model/trim/body-style on a vehicle whose
+  feed gave a VIN but skimped on the rest — never overwrites what the dealer's
+  own feed already stated (that stays the legally authoritative source, Terms
+  6.3). Vehicle gained a real `titleComposed` flag set once at parse time
+  (an altitude-review fix — replaced a fragile "does composeTitle(vehicle)
+  equal vehicle.title" re-derivation that could misfire if a dealer's real
+  title happened to match that format).
+- **Fair Housing advisory check** (`lib/fair-housing.ts`): scans a listing's
+  `highlights` for HUD red-flag phrases ("no children", "walking distance to
+  church", "no Section 8") before they reach the GPT narration prompt;
+  surfaced in the `/api/listings/batch` preview so the agent sees it before
+  approving a render. Advisory only, never blocks — matches how every other
+  "facts-only" safeguard in this codebase is already scoped.
+- **Pronunciation dictionary** (`lib/pronunciation.ts`): respells this
+  platform's own brand names (ForgeVid/RingYield/NeuroHires — ElevenLabs
+  reliably mis-stresses them) plus a couple of well-known car makes, applied
+  right before TTS synthesis only — never touches caption text, which still
+  shows the real spelling. Complements the caption-side `snapBrand()` fuzzy
+  matching from the day before: that fixes what Whisper mis-hears on the way
+  OUT, this fixes what the TTS voice mis-says on the way IN.
+- **Video localization** (`lib/localize.ts`,
+  `POST /api/videos/[videoId]/localize`): translates an existing video's
+  narration into another language while reusing its scene structure (search
+  query, keywords, duration) via the same `presetScenes` mechanism already
+  used for hook/CTA A/B variants — turned out to fit "same body, one axis
+  varies" for language too. Every number/price in the original line must
+  survive translation digit-for-digit or that scene keeps the original-
+  language line; degrades safely on a missing LLM key, a malformed reply, or
+  a thrown API error. Quota-checked and metered exactly like a fresh
+  generation. Reviewed via `/simplify` (2 agents): fixed a duplicate DB fetch
+  (the route called `loadScenes()` AND its own `findUnique`, both reading
+  metadata), and a real gap — manual `GenerationInput` reconstruction
+  silently dropped `mediaAssetIds`/`mediaOnly`/`musicAssetId`/`pip`, which
+  would have made a `mediaOnly` listing/vehicle video localize into stock
+  footage instead of the agent's own photos. `narrationAssetId` stays
+  deliberately excluded (translation needs fresh TTS) with a comment saying
+  so. Noted, not fixed: the quota→create→settle→enqueue sequence is now a
+  third hand-rolled copy (campaigns/variations, ai/route.ts, this route) —
+  a `startGeneration()` extraction is the right eventual fix, refactoring
+  two other working routes wasn't in scope for this change.
+- **Fact-verification pass** (`lib/fact-check.ts`): a second, independent
+  safety net for the same "facts-only" risk — after ANY generation (not just
+  localization), flags any number the finished narration states that never
+  appeared in the prompt that produced it. Advisory, persisted onto
+  `metadata.factCheck`, never blocks.
+- **Template-count claim corrected.** Queried the LIVE production database
+  directly (Railway Postgres, via the public proxy — the internal hostname
+  isn't reachable from outside Railway's network): **12 templates, zero with
+  a real preview video.** README.md, docs/USAGE-GUIDE.md, and the in-product
+  onboarding tour all claimed "500+" / "hundreds of" — none of the three
+  seed scripts run by default, and the one that would produce ~500+ rows
+  (`seed-templates-large.ts`) mostly duplicates ~100-150 unique templates
+  with a trailing number, still with zero real previews. Corrected the copy
+  everywhere it's customer- or judge-facing rather than inventing a new
+  number. Building an actual "30 exceptional templates with real preview
+  videos" library (this roadmap doc's own recommended replacement) is a real
+  content-production task — curating designs and rendering real preview
+  clips — not something to fabricate.
+
+**Investigated, correctly NOT built:**
+
+- **Partial-scene re-render** ("faster editor" ask). A scene swap already
+  only re-searches footage for that one scene (`.../scenes/[sceneId]/swap`),
+  but re-encoding still requires a full `/rerender` of every scene. Checked
+  whether that could be narrowed: transitions cross-fade adjacent clips into
+  ONE merged file before captions/audio ever run, and captions/branding/
+  audio-ducking all operate on the whole timeline in a single ffmpeg
+  invocation — there is no "patch this segment of an already-encoded MP4"
+  primitive available without deeper redesign (making transitions/captions
+  scene-local, or a normalize-clip cache keyed correctly against per-render-
+  varying scene durations). Both are real projects, not a bolt-on; flagged
+  rather than risked against this session's time budget on a live,
+  monetized rendering pipeline.
+
+**Explicitly blocked on something only the founder can provide — not
+attempted, not stubbed:**
+
+- **Frontier video-model router** (Runway/Veo/Kling/Seedance) — needs paid
+  API keys per provider before there's anything real to route between.
+- **Direct Shopify/HubSpot/Salesforce/Google Merchant Center integrations**
+  — each needs an OAuth app registered under this business (redirect URIs,
+  business verification) before a single line of integration code has
+  anything to authenticate against. RESO Web API field mapping was already
+  covered by `lib/mls-feed.ts` from an earlier pass.
+- **Ad-platform measurement** (Meta/TikTok/Google/LinkedIn Ads) — needs
+  business-verified ad accounts and API access on each platform.
+- **SOC 2 certification + external penetration testing** — a paid external
+  audit engagement over months, not code.
+- **Lip-synced avatar localization** — needs HeyGen-tier dubbing capability;
+  the current `lib/avatar-provider.ts` integration has no translate/dub
+  endpoint wired up, and adding one is its own scoped project.
+- **Quality-benchmark dataset** — the scoring harness (`lib/quality-gate.ts`)
+  exists; a real benchmark needs curated representative feeds, which is a
+  data-collection task, not an algorithm.
+
+Gates: `npx tsc --noEmit` clean at every commit, `npm run build` clean at
+every commit, full jest suite green throughout (241 → 326 tests). Every
+feature above shipped with its own test file, none merged red.
