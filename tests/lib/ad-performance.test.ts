@@ -2,7 +2,6 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     adCreative: { findMany: jest.fn(), update: jest.fn() },
     growthConversion: { groupBy: jest.fn() },
-    $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   },
 }))
 
@@ -80,7 +79,7 @@ describe('recomputeCampaignPerformance', () => {
     expect(adCreative.update).toHaveBeenCalledWith({ where: { id: 'b' }, data: { roas: 2, isWinner: false } })
   })
 
-  it('leaves a creative with no imported spend completely untouched, even alongside one that has spend', async () => {
+  it('leaves roas alone but still clears isWinner for a creative with no imported spend, once real data exists elsewhere', async () => {
     adCreative.findMany.mockResolvedValue([
       { id: 'a', totalSpendCents: null }, // e.g. manually marked a winner before real data existed
       { id: 'b', totalSpendCents: 10_000 },
@@ -89,12 +88,27 @@ describe('recomputeCampaignPerformance', () => {
 
     await recomputeCampaignPerformance('campaign-1')
 
-    expect(adCreative.update).not.toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'a' } }))
+    // 'a' is touched for the isWinner invariant, but its `roas` key is
+    // entirely absent from the update — a manual roas value is preserved.
+    expect(adCreative.update).toHaveBeenCalledWith({ where: { id: 'a' }, data: { isWinner: false } })
     expect(adCreative.update).toHaveBeenCalledWith({ where: { id: 'b' }, data: { roas: 0.9, isWinner: true } })
     // Only the creative with spend was ever looked up for revenue.
     expect(growthConversion.groupBy).toHaveBeenCalledWith(expect.objectContaining({
       where: { creativeId: { in: ['b'] } },
     }))
+  })
+
+  it('clears a stale isWinner when a creative that used to have spend has it corrected to zero', async () => {
+    adCreative.findMany.mockResolvedValue([
+      { id: 'a', totalSpendCents: 0 }, // spend corrected down after previously being the winner
+      { id: 'b', totalSpendCents: 5_000 },
+    ] as any)
+    growthConversion.groupBy.mockResolvedValue([{ creativeId: 'b', _sum: { revenueCents: 10_000 } }] as any)
+
+    await recomputeCampaignPerformance('campaign-1')
+
+    expect(adCreative.update).toHaveBeenCalledWith({ where: { id: 'a' }, data: { isWinner: false } })
+    expect(adCreative.update).toHaveBeenCalledWith({ where: { id: 'b' }, data: { roas: 2, isWinner: true } })
   })
 
   it('treats a creative with no conversions yet as zero revenue', async () => {

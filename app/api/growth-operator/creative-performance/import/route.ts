@@ -82,20 +82,22 @@ export async function POST(request: NextRequest) {
     throw error
   }
 
+  // Sequential, not $transaction: each row is an independent write with no
+  // cross-row atomicity requirement, and up to 1000 of them under one held
+  // transaction would tie up a DB connection for the whole import instead of
+  // committing incrementally.
   const now = new Date()
-  await prisma.$transaction(
-    rows.map((row) =>
-      prisma.adCreative.update({
-        where: { id: row.creativeId },
-        data: {
-          ...(row.totalSpendCents !== null ? { totalSpendCents: row.totalSpendCents } : {}),
-          ...(row.totalImpressions !== null ? { totalImpressions: row.totalImpressions } : {}),
-          ...(row.totalClicks !== null ? { totalClicks: row.totalClicks } : {}),
-          spendUpdatedAt: now,
-        },
-      }),
-    ),
-  )
+  for (const row of rows) {
+    await prisma.adCreative.update({
+      where: { id: row.creativeId },
+      data: {
+        ...(row.totalSpendCents !== null ? { totalSpendCents: row.totalSpendCents } : {}),
+        ...(row.totalImpressions !== null ? { totalImpressions: row.totalImpressions } : {}),
+        ...(row.totalClicks !== null ? { totalClicks: row.totalClicks } : {}),
+        spendUpdatedAt: now,
+      },
+    })
+  }
 
   await appendEvidence({
     kind: 'creative_performance.csv_imported',

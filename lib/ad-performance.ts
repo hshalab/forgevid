@@ -20,17 +20,22 @@ export function computeRoas(spendCents: number | null | undefined, revenueCents:
 }
 
 /**
- * Recompute `roas` and `isWinner` for every creative in a campaign that has
- * imported spend, from its `totalSpendCents` plus its summed GrowthConversion
- * revenue. The single highest-ROAS creative among THOSE (strictly greater — a
- * tie marks neither) is `isWinner`.
+ * Recompute `roas` and `isWinner` for a campaign from each creative's
+ * `totalSpendCents` plus its summed GrowthConversion revenue. Does nothing
+ * until at least one creative in the campaign has imported spend — a
+ * campaign with none is left completely alone, so a manual `roas`/`isWinner`
+ * set via `PATCH /api/ad-studio/creatives/[id]` before real data ever
+ * existed survives untouched.
  *
- * A creative with no spend imported yet is left completely untouched — its
- * `roas`/`isWinner` may have been set manually via
- * `PATCH /api/ad-studio/creatives/[id]` before real data existed, and
- * overwriting that back to null/false on every unrelated campaign import
- * would silently destroy it. Once real spend is imported for a creative,
- * computed ROAS takes over for it.
+ * Once real data DOES exist for the campaign, two different rules apply:
+ *  - `roas` is only written for a creative that itself has imported spend —
+ *    one with none keeps whatever value it already had (manual or stale).
+ *  - `isWinner` is a campaign-wide invariant (at most one true creative), so
+ *    EVERY creative in the campaign is touched for it, spend or not. Real
+ *    numbers existing anywhere in the campaign supersede an old manual guess
+ *    everywhere in it — otherwise a creative whose spend was corrected down
+ *    to zero (or one that was never given real data at all) could keep a
+ *    stale `isWinner: true` forever alongside a newly-computed winner.
  *
  * Call this after EITHER side changes: a spend import or a conversion
  * import/manual entry, since ROAS depends on both. Every current write path
@@ -67,12 +72,15 @@ export async function recomputeCampaignPerformance(campaignId: string): Promise<
   // rather than pick one arbitrarily.
   const winnerId = ranked.length === 1 || ranked[0][1] > ranked[1][1] ? ranked[0][0] : null;
 
-  await prisma.$transaction(
-    withSpend.map((c) =>
-      prisma.adCreative.update({
-        where: { id: c.id },
-        data: { roas: roasById.get(c.id), isWinner: c.id === winnerId },
-      }),
-    ),
-  );
+  // Sequential, not $transaction/Promise.all: a campaign holds at most 48
+  // creatives (app/api/ad-studio/campaigns/route.ts), so this is cheap either
+  // way, and each write is independent — no reason to hold one long
+  // transaction open, or burst the connection pool with concurrent writes.
+  for (const c of creatives) {
+    const roas = roasById.get(c.id);
+    await prisma.adCreative.update({
+      where: { id: c.id },
+      data: roas !== undefined ? { roas, isWinner: c.id === winnerId } : { isWinner: c.id === winnerId },
+    });
+  }
 }

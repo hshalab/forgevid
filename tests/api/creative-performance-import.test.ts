@@ -28,7 +28,6 @@ jest.mock('@/lib/ad-performance', () => ({ recomputeCampaignPerformance: jest.fn
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     adCreative: { findMany: jest.fn(), update: jest.fn() },
-    $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   },
 }))
 
