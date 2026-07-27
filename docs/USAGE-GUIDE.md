@@ -257,7 +257,7 @@ const getEngagementMetrics = async (videoId: string) => {
 Extensive library of video templates and media assets with AI-powered template generation.
 
 ### Features
-- **Template Library**: 500+ professional video templates
+- **Template Library**: Professional video templates across business, real estate, automotive, and social media
 - **Media Assets**: Images, videos, audio, animations
 - **AI Template Generation**: Create custom templates from text prompts
 - **Advanced Search**: Filter by category, duration, style, tags

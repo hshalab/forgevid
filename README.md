@@ -50,7 +50,7 @@ ForgeVid is a comprehensive video creation platform that leverages artificial in
 
 **Professional Video Editor**: Modern drag-and-drop timeline with real-time preview, AI-powered editing suggestions, and one-click optimization for social platforms (TikTok, YouTube, LinkedIn). Cloud-based rendering offloads compute for fast exports.
 
-**Template Library**: 500+ customizable templates for marketing, education, gaming, real estate, and more. AI-driven template remixing lets you blend and adapt templates based on your creative prompts. User-generated templates and a community marketplace coming soon.
+**Template Library**: Customizable templates across business, real estate, automotive, and social media, with AI-driven remixing to blend and adapt templates based on your creative prompts. User-generated templates and a community marketplace coming soon.
 
 **Stock Media Integration**: Access millions of stock images, videos, and music via integrated asset search. AI can recommend media based on your script or project type.
 

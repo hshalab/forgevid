@@ -49,7 +49,7 @@ const tourSteps: TourStep[] = [
   {
     id: "templates",
     title: "Template Gallery",
-    description: "Browse hundreds of professional templates to jumpstart your video creation.",
+    description: "Browse professional templates to jumpstart your video creation.",
     target: "[data-tour='templates']",
     position: "left",
   },
