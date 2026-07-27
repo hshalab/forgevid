@@ -1378,3 +1378,61 @@ Gates: tsc clean, full build clean, jest green (382 → 389 tests).
 Salesforce OAuth, live ad-platform API pulls, and SOC2/pentest remain
 genuinely blocked on external accounts/budget. HeyGen dubbing is no longer
 on that list.
+
+## 2026-07-27 (cont'd) — frontier video-model router unblocked: Runway, opt-in and paid
+
+The user obtained a real `RUNWAY_API_KEY` (already correctly set in Railway
+production) and explicitly chose the integration shape: **a new opt-in
+provider choice** alongside the existing free stock-footage assembler —
+picked per-video, priced in credits, never a replacement for the free path.
+
+- Verified the account BEFORE writing any code, via `GET /v1/organization`
+  (free, read-only, no generation spend): the key authenticates, but
+  **`creditBalance` is currently 0** — real generation cannot succeed until
+  the user adds billing/credits on Runway's own dashboard. Flagging this
+  plainly rather than claiming the feature is "done" in the sense that
+  matters to a customer.
+- **Runway's API turned out to already be a multi-frontier-model router.**
+  The same account/key reaches Runway's own gen4.5/gen4_turbo AND
+  third-party models it hosts — Google veo3.1, ByteDance seedance2,
+  Kuaishou kling3.0_pro — confirmed live on this account, not from docs
+  alone. This ONE integration covers what the blocked list called four
+  separate provider integrations (Runway/Veo/Kling/Seedance).
+- `lib/runway-provider.ts`: `text_to_video` client, contract confirmed
+  against Runway's own docs (WebFetch kept landing on a JS-rendered shell
+  page for the reference docs; worked around via WebSearch + `.md`-suffixed
+  doc URLs, and cross-checked the router architecture against an
+  independent third-party source before trusting it for a real paid
+  integration). Normalizes Runway's own SUCCEEDED/FAILED/CANCELED/RUNNING/
+  PENDING vocabulary into the same processing/completed/failed shape
+  `lib/avatar-provider.ts` and `lib/video-translate.ts` already return —
+  that normalization belongs in the provider client, not the calling route.
+  Enforces the 2-10s duration bound itself too (not just the route's zod
+  schema), so a future second caller can't slip an uncapped duration
+  through to a real, per-second-billed API.
+- `POST /api/videos/runway/generate`: Pro+ gated (`allowsFrontierGeneration`
+  in lib/plan.ts), priced at 2 purchased credits — worst case ($0.12/s x
+  10s = $1.20) is close to break-even against one credit's amortized value
+  on its own, and third-party pricing through Runway's markup isn't
+  independently published (lib/cost-ledger.ts applies the one verified
+  rate, gen4.5's $0.12/s, uniformly as a conservative estimate rather than
+  inventing per-model numbers). The curated 5-model list ForgeVid exposes
+  is a product decision that lives in the route, not the provider client.
+- **Two review passes, both found real things**: a reuse/simplification/
+  efficiency/altitude pass moved moderation to run last (after every free
+  gate — an OpenAI moderation call shouldn't be spent on a request already
+  headed for a 503/429/403); a security pass flagged that `moderateText`'s
+  existing fail-OPEN default (fine for callers whose text still passes
+  through a later vetted step, e.g. a script rewrite) is the wrong
+  tradeoff here, since an unmoderated prompt reaching Runway on a
+  moderation-service outage becomes real, billed, generated VIDEO with no
+  further check — the same risk profile `moderateImageUrl` already treats
+  as fail-closed. Fixed surgically: `moderateText` gained an opt-in
+  `{ failClosed: true }` (every existing caller keeps its fail-open
+  default; only the Runway route opts into fail-closed).
+- Not fixed here, flagged again: the quota-check-then-settle race is
+  pre-existing and shared by every generation route (avatar, dub, runway)
+  — a systemic quota-architecture question, not a one-route patch.
+
+Gates: `tsc --noEmit` clean, full `jest` suite (409 tests, up from 389),
+`next build` clean.
