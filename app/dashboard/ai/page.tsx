@@ -15,6 +15,7 @@ import AIChatPanel from "@/components/ai-chat-panel"
 import SceneEditorPanel from "@/components/scene-editor-panel"
 import MediaPicker from "@/components/media-picker"
 import AvatarStudioPanel from "@/components/avatar-studio-panel"
+import RunwayStudioPanel from "@/components/runway-studio-panel"
 import SiteBriefPanel from "@/components/site-brief-panel"
 import { VoicePreviewButton } from "@/components/voice-preview-button"
 import { withCsrfHeaders } from "@/lib/csrf-client"
@@ -385,13 +386,14 @@ export default function AIFeaturesPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="chat" className="flex items-center gap-1">
                 <MessageCircle className="h-3 w-3" />
                 Chat
               </TabsTrigger>
               <TabsTrigger value="create">AI Creator</TabsTrigger>
               <TabsTrigger value="avatar">AI Presenter</TabsTrigger>
+              <TabsTrigger value="frontier">Frontier AI</TabsTrigger>
               <TabsTrigger value="emotion" className="flex items-center gap-1">
                 <Heart className="h-3 w-3" />
                 Emotion AI
@@ -996,12 +998,17 @@ export default function AIFeaturesPage() {
               )}
             </TabsContent>
 
-            {/* Emotion AI Tab */}
             {/* AI presenter (HeyGen) — Pro plans; renders bill provider credits */}
             <TabsContent value="avatar" className="space-y-6">
               <AvatarStudioPanel />
             </TabsContent>
 
+            {/* Frontier AI video (Runway/Veo/Seedance/Kling) — Pro plans; opt-in, bills credits */}
+            <TabsContent value="frontier" className="space-y-6">
+              <RunwayStudioPanel />
+            </TabsContent>
+
+            {/* Emotion AI Tab */}
             <TabsContent value="emotion" className="space-y-6">
               <Card>
                 <CardHeader>

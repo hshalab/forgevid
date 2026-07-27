@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Crown, Loader2, UserSquare2, Play } from "lucide-react"
 import { toast } from "sonner"
 import { withCsrfHeaders } from "@/lib/csrf-client"
+import { pollAiJob } from "@/lib/ai-job-poll-client"
 
 interface Avatar {
   avatarId: string
@@ -80,23 +81,14 @@ export function AvatarStudioPanel() {
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Avatar render failed to start")
 
-      const videoId = data?.data?.videoId
-      const deadline = Date.now() + 16 * 60 * 1000
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 5000))
-        const statusRes = await fetch(`/api/ai/jobs/${videoId}`)
-        if (!statusRes.ok) continue
-        const job = await statusRes.json()
-        setProgress(job.percent ?? 0)
-        if (job.status === "COMPLETED" && job.videoUrl) {
-          setVideoUrl(job.videoUrl)
-          setProgress(100)
-          toast.success("Avatar video ready!")
-          return
-        }
-        if (job.status === "FAILED") throw new Error(job.error || "Avatar render failed")
-      }
-      throw new Error("Avatar render timed out")
+      const result = await pollAiJob(data?.data?.videoId, {
+        onProgress: setProgress,
+        errorFallback: "Avatar render failed",
+        timeoutMessage: "Avatar render timed out",
+      })
+      setVideoUrl(result.videoUrl)
+      setProgress(100)
+      toast.success("Avatar video ready!")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Avatar render failed")
     } finally {

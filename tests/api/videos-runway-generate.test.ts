@@ -8,13 +8,18 @@ jest.mock('@/lib/runway-provider', () => ({
   createTextToVideo: jest.fn(),
   getRunwayTaskStatus: jest.fn(),
   isRunwayConfigured: jest.fn(),
+  // Real constants, not mocks — the route's zod schema is built from these
+  // at module load, so stubbing them out would break every parse.
+  MIN_DURATION_SECONDS: 2,
+  MAX_DURATION_SECONDS: 10,
+  RUNWAY_ASPECT_RATIOS: ['16:9', '9:16', '1:1'],
 }))
 jest.mock('@/lib/quota', () => ({
   checkGenerationQuota: jest.fn(),
   settleGenerationEntitlement: jest.fn(),
 }))
 jest.mock('@/lib/provider-job-poll', () => ({ pollProviderJobToCompletion: jest.fn() }))
-jest.mock('@/lib/plan', () => ({ allowsFrontierGeneration: jest.fn() }))
+jest.mock('@/lib/plan', () => ({ allowsFrontierGeneration: jest.fn(), getUserPlan: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: { video: { create: jest.fn() } },
 }))
@@ -22,11 +27,11 @@ jest.mock('@/lib/prisma', () => ({
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { moderateText } from '@/lib/moderation'
-import { allowsFrontierGeneration } from '@/lib/plan'
+import { allowsFrontierGeneration, getUserPlan } from '@/lib/plan'
 import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota'
 import { pollProviderJobToCompletion } from '@/lib/provider-job-poll'
 import { createTextToVideo, getRunwayTaskStatus, isRunwayConfigured } from '@/lib/runway-provider'
-import { POST } from '@/app/api/videos/runway/generate/route'
+import { GET, POST } from '@/app/api/videos/runway/generate/route'
 
 const session = getServerSession as jest.MockedFunction<typeof getServerSession>
 const video = prisma.video as jest.Mocked<typeof prisma.video>
@@ -135,5 +140,52 @@ describe('POST /api/videos/runway/generate', () => {
     mockedGetStatus.mockResolvedValue({ status: 'processing', videoUrl: null, error: null })
     await pollArgs.checkStatus()
     expect(mockedGetStatus).toHaveBeenCalledWith('task_123')
+  })
+})
+
+describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
+  const mockedGetPlan = getUserPlan as jest.Mock
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    session.mockResolvedValue({ user: { id: 'user-1' } } as any)
+    mockedGetPlan.mockResolvedValue('pro')
+    mockedAllows.mockReturnValue(true)
+    mockedIsConfigured.mockReturnValue(true)
+  })
+
+  it('requires authentication', async () => {
+    session.mockResolvedValue(null)
+    const response = await GET()
+    expect(response.status).toBe(401)
+  })
+
+  it('returns 403 with upgradeRequired for a non-Pro plan', async () => {
+    mockedGetPlan.mockResolvedValue('free')
+    mockedAllows.mockReturnValue(false)
+    const response = await GET()
+    const body = await response.json()
+    expect(response.status).toBe(403)
+    expect(body.upgradeRequired).toBe(true)
+  })
+
+  it('returns 503 when Runway is not configured', async () => {
+    mockedIsConfigured.mockReturnValue(false)
+    const response = await GET()
+    expect(response.status).toBe(503)
+  })
+
+  it('returns the curated model list, credit cost, and bounds', async () => {
+    const response = await GET()
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body.models.map((m: { id: string }) => m.id)).toEqual([
+      'gen4.5', 'gen4_turbo', 'veo3.1', 'seedance2', 'kling3.0_pro',
+    ])
+    expect(body.models.every((m: { label?: string }) => typeof m.label === 'string' && m.label.length > 0)).toBe(true)
+    expect(body.creditCost).toBe(2)
+    expect(body.minDuration).toBe(2)
+    expect(body.maxDuration).toBe(10)
+    expect(body.aspectRatios).toEqual(['16:9', '9:16', '1:1'])
   })
 })

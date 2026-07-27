@@ -32,9 +32,11 @@ const API_VERSION = '2024-11-06';
 // gen4.5's documented range — the one duration bound this integration can
 // actually verify. Enforced HERE (not just in the route's zod schema) so a
 // future second caller of this module can't slip an uncapped duration
-// through to a real, per-second-billed API.
-const MIN_DURATION_SECONDS = 2;
-const MAX_DURATION_SECONDS = 10;
+// through to a real, per-second-billed API. Exported so the route's zod
+// schema and its GET pre-flight derive from the same numbers instead of
+// keeping their own copies.
+export const MIN_DURATION_SECONDS = 2;
+export const MAX_DURATION_SECONDS = 10;
 
 export function isRunwayConfigured(): boolean {
   return Boolean(process.env.RUNWAY_API_KEY);
@@ -54,7 +56,11 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
   };
 }
 
-const RATIO_BY_ASPECT: Record<'16:9' | '9:16' | '1:1', string> = {
+/** The aspect ratios this integration maps to Runway ratio strings — single source for the route's schema and pre-flight. */
+export const RUNWAY_ASPECT_RATIOS = ['16:9', '9:16', '1:1'] as const;
+export type RunwayAspectRatio = (typeof RUNWAY_ASPECT_RATIOS)[number];
+
+const RATIO_BY_ASPECT: Record<RunwayAspectRatio, string> = {
   '16:9': '1280:720',
   '9:16': '720:1280',
   '1:1': '960:960',
@@ -64,7 +70,7 @@ export interface RunwayGenerationArgs {
   promptText: string;
   /** Any Runway model string — which ones ForgeVid exposes is the caller's choice, not this module's. */
   model: string;
-  aspectRatio: '16:9' | '9:16' | '1:1';
+  aspectRatio: RunwayAspectRatio;
   /** Seconds, clamped to [2, 10] — see MIN/MAX_DURATION_SECONDS above. */
   duration: number;
   seed?: number;

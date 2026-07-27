@@ -3,11 +3,18 @@ import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { allowsFrontierGeneration } from '@/lib/plan';
+import { allowsFrontierGeneration, getUserPlan } from '@/lib/plan';
 import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
 import { pollProviderJobToCompletion } from '@/lib/provider-job-poll';
 import { moderateText, recordModerationBlock } from '@/lib/moderation';
-import { createTextToVideo, getRunwayTaskStatus, isRunwayConfigured } from '@/lib/runway-provider';
+import {
+  createTextToVideo,
+  getRunwayTaskStatus,
+  isRunwayConfigured,
+  MAX_DURATION_SECONDS,
+  MIN_DURATION_SECONDS,
+  RUNWAY_ASPECT_RATIOS,
+} from '@/lib/runway-provider';
 
 /**
  * POST /api/videos/runway/generate — real AI-generated video from a text
@@ -30,19 +37,28 @@ import { createTextToVideo, getRunwayTaskStatus, isRunwayConfigured } from '@/li
  * about Runway's API, so it lives here rather than in lib/runway-provider.ts.
  */
 const RUNWAY_VIDEO_MODELS = [
-  'gen4.5', // Runway's own flagship
-  'gen4_turbo', // Runway's own, faster/cheaper
-  'veo3.1', // Google
-  'seedance2', // ByteDance
-  'kling3.0_pro', // Kuaishou
+  'gen4.5',
+  'gen4_turbo',
+  'veo3.1',
+  'seedance2',
+  'kling3.0_pro',
 ] as const;
+
+/** User-facing labels for the picker the GET handler serves. */
+const MODEL_LABELS: Record<(typeof RUNWAY_VIDEO_MODELS)[number], string> = {
+  'gen4.5': "Runway Gen-4.5 — Runway's flagship",
+  gen4_turbo: 'Runway Gen-4 Turbo — faster',
+  'veo3.1': 'Google Veo 3.1',
+  seedance2: 'ByteDance Seedance 2',
+  'kling3.0_pro': 'Kuaishou Kling 3.0 Pro',
+};
 
 const bodySchema = z.object({
   promptText: z.string().min(3).max(1000),
   model: z.enum(RUNWAY_VIDEO_MODELS).default('gen4.5'),
-  aspectRatio: z.enum(['16:9', '9:16', '1:1']).default('16:9'),
-  /** Seconds — 2-10 is gen4.5's documented range, also enforced inside lib/runway-provider.ts. */
-  duration: z.number().int().min(2).max(10).default(5),
+  aspectRatio: z.enum(RUNWAY_ASPECT_RATIOS).default('16:9'),
+  /** Seconds — gen4.5's documented range, sourced from (and re-enforced inside) lib/runway-provider.ts. */
+  duration: z.number().int().min(MIN_DURATION_SECONDS).max(MAX_DURATION_SECONDS).default(5),
   seed: z.number().int().min(0).max(4294967295).optional(),
 });
 
@@ -158,4 +174,40 @@ export async function POST(req: NextRequest) {
     console.error('[videos/runway/generate]', message);
     return NextResponse.json({ error: message }, { status: 502 });
   }
+}
+
+/**
+ * GET — availability pre-flight for the studio panel, mirroring GET
+ * /api/avatars: the UI learns up front whether to show the upgrade prompt
+ * (403), the unconfigured notice (503), or the form with the curated model
+ * list. Free and read-only — no Runway call, no spend.
+ */
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  const plan = await getUserPlan(session.user.id);
+  if (!allowsFrontierGeneration(plan)) {
+    return NextResponse.json(
+      { error: `AI video generation requires the Pro plan (you are on ${plan})`, upgradeRequired: true },
+      { status: 403 },
+    );
+  }
+
+  if (!isRunwayConfigured()) {
+    return NextResponse.json(
+      { error: 'AI video generation is unavailable (RUNWAY_API_KEY is not configured)' },
+      { status: 503 },
+    );
+  }
+
+  return NextResponse.json({
+    models: RUNWAY_VIDEO_MODELS.map((id) => ({ id, label: MODEL_LABELS[id] })),
+    creditCost: RUNWAY_CREDIT_COST,
+    minDuration: MIN_DURATION_SECONDS,
+    maxDuration: MAX_DURATION_SECONDS,
+    aspectRatios: RUNWAY_ASPECT_RATIOS,
+  });
 }

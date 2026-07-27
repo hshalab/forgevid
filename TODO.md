@@ -1474,3 +1474,65 @@ ever tackled — not route-by-route.
 
 No code changes from this pass; nothing to re-verify beyond what the
 Runway commit already gates.
+
+## 2026-07-27 (cont'd) — Runway gets a UI; timeline-list audit closes most items
+
+Audited the remaining "partial or undone" items from the submission-deadline
+timeline against reality (code + live systems, not docs):
+
+- **Stripe live mode: ALREADY ACTIVE** — production Railway carries
+  `sk_live_`/`pk_live_` keys; PROVENANCE.md's "not yet activated" claim was
+  stale (billing was certified with real transactions on 7/25 per git log).
+- **Railway deployment: HEALTHY** — the pasted analysis's "six failed
+  deployments" is stale; the service is Online, serving the latest commit
+  lineage, `/api/monitoring/health` returns `{status:"ok", llm:"gemini"}`,
+  home and `/dashboard/judge` both 200 live.
+- **Growth Operator loop (inventory intelligence, Gemini decisions,
+  approval inbox, tracked links/QR, attribution, results→next
+  recommendation): ALREADY IMPLEMENTED** — per
+  `evidence/GROWTH-OPERATOR-IMPLEMENTATION-AUDIT.md` (7/25), certified by
+  type-check, 42 suites/238 tests, build, 4 Playwright scenarios, and live
+  provider checks.
+- **GitHub Actions: ALL workflows fail because the org account is locked
+  for a BILLING issue** ("The job was not started because your account is
+  locked due to a billing issue") — including the hourly inventory-sources
+  cron. Not fixable in code. The Windows fallback scheduler
+  (`scripts/inventory-cron.cmd`, 7/25) covers imports meanwhile. USER
+  ACTION: unlock billing at github.com → Kryst-Investments-LLC → Settings
+  → Billing.
+
+The one real implementation gap found: **the Runway feature had no UI** —
+API-only, undiscoverable in the product. Closed it:
+
+- `GET /api/videos/runway/generate`: availability pre-flight mirroring
+  `GET /api/avatars` (auth → plan gate w/ upgradeRequired → configured
+  check → curated model list with labels + credit cost + duration/aspect
+  bounds). Free and read-only, no Runway call.
+- `components/runway-studio-panel.tsx`: "Frontier AI" tab in the AI Studio
+  (7th tab), mirroring the avatar panel's states (loading/upgrade/
+  unconfigured/error/ready). Explicit opt-in cost consent: the description
+  and the button both name the 2-credit price; nothing starts without a
+  click.
+- **Review pass found 2 real things, both fixed**: (1) the client-side
+  jobs-poll loop was at occurrence FIVE across panels (avatar, voice-to-
+  video, scene-editor, ad-studio, + this new one) — extracted
+  `lib/ai-job-poll-client.ts` and refactored the avatar + frontier panels
+  onto it (the other three can adopt with their own interval settings);
+  the shared helper also fixes a latent bug all the copies had: CANCELLED
+  wasn't treated as terminal, so a cancelled job spun until the 16-min
+  timeout. (2) the GET's duration/aspect literals were a third copy of
+  bounds `lib/runway-provider.ts` already owns — exported
+  `MIN/MAX_DURATION_SECONDS` + `RUNWAY_ASPECT_RATIOS` from the provider
+  and derived both the zod schema and the GET response from them.
+- Reviewer verified the panel's wiring against the real endpoints: reads
+  top-level `videoId` (runway) vs `data.videoId` (avatar wraps), the jobs
+  endpoint's `percent/status/videoUrl` fields, CSRF on POST only (GET is
+  exempt in middleware), and the client 16-min poll deadline correctly
+  outliving the server's 15-min one.
+
+Gates: tsc clean, 413 tests green (60 suites), build clean.
+
+**Still user-action-only:** add Runway credits (creditBalance is 0 — the
+UI will render but real generation fails until billing is set up on
+Runway's dashboard); unlock GitHub org billing; send the eligibility email
+(`evidence/XPRIZE-ELIGIBILITY-EMAIL.txt`).
