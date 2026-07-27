@@ -24,6 +24,7 @@ import path from 'path';
 import { parseDurationSeconds, resolveFfmpegPath } from './ffmpeg-env';
 import { DEFAULT_TTS_MODEL, DEFAULT_VOICE_ID } from './voice-catalog';
 import { withProviderReliability } from './provider-reliability';
+import { applyPronunciation } from './pronunciation';
 
 export interface SceneLine {
   id: string;
@@ -116,8 +117,12 @@ export async function synthesizeSceneVoiceovers(
   const out: SceneVoiceover[] = [];
 
   for (const scene of scenes) {
-    const text = scene.description.trim();
-    if (!text) return null;
+    const raw = scene.description.trim();
+    if (!raw) return null;
+    // Respell tricky words (this platform's own brand names, a few
+    // well-known car makes) so the TTS voice says them right — never shown
+    // on screen, only what's actually fed to synthesis. See pronunciation.ts.
+    const text = applyPronunciation(raw);
 
     const file = path.join(cacheDir(), `${sceneCacheKey(text, voice)}.mp3`);
     let cached = fs.existsSync(file) && fs.statSync(file).size > 0;
@@ -166,7 +171,9 @@ export function peekCachedSegments(
 ): CachedSegmentPeek[] {
   const voice = voiceId || DEFAULT_VOICE_ID;
   return scenes.map((scene) => {
-    const text = scene.description.trim();
+    // Must match synthesizeSceneVoiceovers()'s cache key exactly (see its
+    // own doc comment) — including the pronunciation respelling applied there.
+    const text = applyPronunciation(scene.description.trim());
     const file = path.join(cacheDir(), `${sceneCacheKey(text, voice)}.mp3`);
     const cached = fs.existsSync(file) && fs.statSync(file).size > 0;
     return { sceneId: scene.id, cached, chars: text.length };
