@@ -56,6 +56,7 @@ import {
   synthesizeSceneVoiceovers,
   type SceneVoiceover,
 } from './voiceover';
+import { runQualityGate, scenesForIssues, type QualityReport } from './quality-gate';
 
 // Dynamic imports to avoid webpack bundling issues
 let ffmpeg: any;
@@ -1028,6 +1029,8 @@ export interface AssembleResult {
    * thumbnails. Persist THESE, not the input, or the editor drifts from the video.
    */
   scenes: ResolvedScene[];
+  /** Post-render quality check of the local file, before it was uploaded. */
+  quality: QualityReport;
 }
 
 export async function assembleVideo(
@@ -1343,6 +1346,9 @@ export async function assembleVideo(
     const outputDir = path.join(process.cwd(), 'public', 'generated');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
     const outputPath = path.join(outputDir, outputFilename);
+    // Set inside the ffmpeg command Promise below (hasAudio there is scene-local);
+    // read afterward to size the quality gate's audio expectation correctly.
+    let renderedHasAudio = false;
 
     // Real captions come from transcribing the narration. Without a voiceover
     // (or without an OpenAI key) fall back to one cue per scene.
@@ -1578,6 +1584,7 @@ export async function assembleVideo(
       }
 
       const hasAudio = voiceIndex > 0 || musicIndex > 0;
+      renderedHasAudio = hasAudio;
       const maps = hasAudio ? ['vout', 'aout'] : ['vout'];
 
       const outputOptions = [
@@ -1613,12 +1620,27 @@ export async function assembleVideo(
         .run();
     });
 
+    // Check the local file BEFORE persisting — persistGeneratedVideo deletes it
+    // once uploaded, and there is nothing to inspect afterward.
+    const quality = runQualityGate(outputPath, {
+      expectedDurationSec: timelineDuration,
+      expectedWidth: outW,
+      expectedHeight: outH,
+      requireAudio: renderedHasAudio,
+    });
+    if (!quality.passed) {
+      console.warn(
+        `[Video Generator] Quality gate flagged this render (score ${quality.score}): ` +
+          quality.issues.map((i) => i.message).join('; '),
+      );
+    }
+
     // Grab the poster frame BEFORE persisting — persistGeneratedVideo deletes
     // the local render once it is uploaded. Take it ~1s in, past any fade-in.
     const thumbnailUrl = await extractThumbnail(outputPath, Math.min(1, timelineDuration / 2));
 
     const videoUrl = await persistGeneratedVideo(outputPath, outputFilename);
-    return { videoUrl, cues, thumbnailUrl, scenes };
+    return { videoUrl, cues, thumbnailUrl, scenes, quality };
   } finally {
     // Always clean temp artifacts, even on failure. Never the caller's media —
     // a synthesized voiceover is already in tempFiles; an injected one is not,
@@ -1645,6 +1667,7 @@ export async function generateVideoWithScenes(
   scenes: ResolvedScene[];
   cues: CaptionCue[];
   thumbnailUrl: string | null;
+  quality: QualityReport;
 }> {
   const {
     prompt,
@@ -1703,7 +1726,7 @@ export async function generateVideoWithScenes(
     ? options.musicPath ?? selectMusicPath(mood ?? options.style)
     : null;
 
-  const assembled = await assembleVideo(resolved, addOns || [], aspectRatio, {
+  const assembleOptions = {
     musicPath,
     voiceId,
     branding,
@@ -1720,10 +1743,46 @@ export async function generateVideoWithScenes(
           captionAnimation: options.captionPreset === 'karaoke' ? ('karaoke' as const) : null,
         }
       : {}),
-  });
+  };
+
+  let assembled = await assembleVideo(resolved, addOns || [], aspectRatio, assembleOptions);
+
+  // One targeted retry: when the gate localizes black/frozen frames to
+  // specific scenes, swap just those scenes' stock clip and re-assemble once.
+  // Never swaps a scene backed by the user's OWN media — a different pick
+  // isn't available, and a bad upload is the user's input, not ours to fix.
+  // A duration/resolution/audio-stream issue isn't scene-local, so there is
+  // nothing to swap for those; they pass through unretried.
+  if (!assembled.quality.passed) {
+    const flagged = [...scenesForIssues(resolved, assembled.quality.issues)].filter(
+      (idx) => resolved[idx] && !userMedia[resolved[idx].index],
+    );
+    if (flagged.length > 0) {
+      console.warn(
+        `[Video Generator] Quality gate retry: re-picking footage for scene(s) ` +
+          flagged.map((i) => i + 1).join(', '),
+      );
+      const retryResolved = [...resolved];
+      for (const idx of flagged) {
+        const swapped = await resolveSceneClip(
+          planned[idx],
+          new Set([...(options.excludeClipUrls ?? []), resolved[idx].clipUrl]),
+          aspectRatio,
+        );
+        if (swapped) retryResolved[idx] = swapped;
+      }
+      const retryAssembled = await assembleVideo(retryResolved, addOns || [], aspectRatio, assembleOptions);
+      // Keep the retry only if it's no worse — a flaky gate check shouldn't
+      // discard a render that was actually fine.
+      if (retryAssembled.quality.score >= assembled.quality.score) {
+        assembled = retryAssembled;
+      }
+    }
+  }
 
   console.log(
-    `[Video Generator] ✅ Generated ${aspectRatio} video with ${assembled.scenes.length} scenes`,
+    `[Video Generator] ✅ Generated ${aspectRatio} video with ${assembled.scenes.length} scenes` +
+      (assembled.quality.passed ? '' : ` (quality gate: ${assembled.quality.score}/100)`),
   );
   // Return the scenes as RENDERED (narration-paced durations, per-scene thumbs)
   // so what gets persisted matches the video.
@@ -1732,6 +1791,7 @@ export async function generateVideoWithScenes(
     scenes: assembled.scenes,
     cues: assembled.cues,
     thumbnailUrl: assembled.thumbnailUrl,
+    quality: assembled.quality,
   };
 }
 

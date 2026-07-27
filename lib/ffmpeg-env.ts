@@ -101,6 +101,22 @@ export function supportsFilter(name: string): boolean {
   return availableFilters().has(name);
 }
 
+/**
+ * Run the resolved ffmpeg binary for a one-shot analysis pass and return its
+ * combined stderr+stdout. No ffprobe binary ships with this project (only
+ * ffmpeg-static), so callers that need stream info or detection-filter output
+ * (see quality-gate.ts) parse ffmpeg's own text banner/filter logs instead of
+ * a separate probe call.
+ */
+export function runFfmpeg(args: string[], timeoutMs = 120_000): string {
+  const res = spawnSync(resolveFfmpegPath(), args, {
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    timeout: timeoutMs,
+  });
+  return `${res.stderr ?? ''}${res.stdout ?? ''}`;
+}
+
 /** Test hook. */
 export function __resetFfmpegEnvCache() {
   cachedPath = undefined;

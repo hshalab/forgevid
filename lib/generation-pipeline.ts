@@ -388,7 +388,7 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
     const narrationPath = await audioAssetForVideo(videoId, input.narrationAssetId);
     // Their own music track beats the (possibly empty) bundled library.
     const musicOverride = await audioAssetForVideo(videoId, input.musicAssetId);
-    const { videoUrl, scenes, cues, thumbnailUrl } = await generateVideoWithScenes({
+    const { videoUrl, scenes, cues, thumbnailUrl, quality } = await generateVideoWithScenes({
       prompt: script,
       style: input.style,
       duration: input.duration,
@@ -440,8 +440,9 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
     await writeProgress(
       videoId,
       { stage: 'done', percent: 100, videoUrl, provider: 'stock-assembler' },
-      // captions are persisted so they can be downloaded as SRT/VTT.
-      { script, scenes, captions: cues },
+      // captions are persisted so they can be downloaded as SRT/VTT; the
+      // quality report surfaces in the editor/admin when a render was flagged.
+      { script, scenes, captions: cues, qualityGate: quality },
     );
 
     await settle(true, input.prompt);
@@ -666,6 +667,7 @@ export async function rerenderVideo(videoId: string): Promise<string> {
         captions: cues,
         rerenderCount: rerenderCount + 1,
         narrationEditCount: isNarrationEdit ? narrationEditCount + 1 : narrationEditCount,
+        qualityGate: assembled.quality,
       },
     );
 
