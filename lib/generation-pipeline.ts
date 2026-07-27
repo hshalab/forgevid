@@ -28,6 +28,7 @@ import { refundCreditForVideo } from './credits';
 import { peekCachedSegments, synthesizeSceneVoiceovers } from './voiceover';
 import { sendExportCompleteEmail } from './email';
 import { rejectedClipUrls } from './clip-memory';
+import { checkNarrationFacts } from './fact-check';
 
 /**
  * "Your video is ready" — the come-back-to-a-finished-video loop. Best-effort:
@@ -435,6 +436,15 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
         ...(thumbnailUrl ? { thumbnail: thumbnailUrl } : {}),
       },
     });
+    // Advisory hallucination check: did the finished narration state a number
+    // (a price, a mileage, a bed count) that never appeared in the prompt
+    // that generated it? Never blocks — see lib/fact-check.ts.
+    const factCheck = checkNarrationFacts(scenes.map((s) => spokenLine(s)), input.prompt);
+    if (factCheck.flagged) {
+      console.warn(
+        `[Pipeline] Fact check flagged possibly invented number(s) in ${videoId}: ${factCheck.unsourcedNumbers.join(', ')}`,
+      );
+    }
     // Persist scenes alongside the script so the editor can load, swap, and
     // re-render individual scenes without re-deriving them from the prompt.
     await writeProgress(
@@ -442,7 +452,7 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
       { stage: 'done', percent: 100, videoUrl, provider: 'stock-assembler' },
       // captions are persisted so they can be downloaded as SRT/VTT; the
       // quality report surfaces in the editor/admin when a render was flagged.
-      { script, scenes, captions: cues, qualityGate: quality },
+      { script, scenes, captions: cues, qualityGate: quality, factCheck },
     );
 
     await settle(true, input.prompt);

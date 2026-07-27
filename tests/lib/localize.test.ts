@@ -1,0 +1,114 @@
+jest.mock('@/lib/ai/llm', () => ({
+  llm: { chat: { completions: { create: jest.fn() } } },
+  llmModel: jest.fn(() => 'test-model'),
+  hasLlmKey: jest.fn(() => true),
+}))
+
+import { llm, hasLlmKey } from '@/lib/ai/llm'
+import { translateNarrationLines, localizedPresetScenes } from '@/lib/localize'
+import type { ResolvedScene } from '@/lib/video-generator'
+
+const mockCreate = llm.chat.completions.create as jest.Mock
+const mockHasLlmKey = hasLlmKey as jest.Mock
+
+function completion(content: string) {
+  return { choices: [{ message: { content } }] }
+}
+
+function scene(overrides: Partial<ResolvedScene> = {}): ResolvedScene {
+  return {
+    id: 'scene-1',
+    index: 0,
+    description: 'A car in a driveway',
+    narration: 'This RAV4 is priced at $28,900.',
+    keywords: [],
+    duration: 5,
+    visualElements: [],
+    clipUrl: 'https://example.com/1.mp4',
+    matchedQuery: 'car driveway',
+    ...overrides,
+  }
+}
+
+describe('translateNarrationLines', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockHasLlmKey.mockReturnValue(true)
+  })
+
+  it('returns an empty array for no input, without calling the LLM', async () => {
+    const result = await translateNarrationLines([], 'es')
+    expect(result).toEqual([])
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('returns the original lines unchanged when no LLM key is configured', async () => {
+    mockHasLlmKey.mockReturnValue(false)
+    const result = await translateNarrationLines(['Hello world'], 'es')
+    expect(result).toEqual(['Hello world'])
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('translates lines one-to-one, in order', async () => {
+    mockCreate.mockResolvedValue(completion('1. Hola mundo\n2. Reserva tu prueba de manejo'))
+    const result = await translateNarrationLines(['Hello world', 'Book your test drive'], 'es')
+    expect(result).toEqual(['Hola mundo', 'Reserva tu prueba de manejo'])
+  })
+
+  it('falls back to the original lines when the reply has the wrong line count', async () => {
+    mockCreate.mockResolvedValue(completion('1. Hola mundo'))
+    const result = await translateNarrationLines(['Hello world', 'Book your test drive'], 'es')
+    expect(result).toEqual(['Hello world', 'Book your test drive'])
+  })
+
+  it('falls back to the original line when a translation drops a number that was there', async () => {
+    mockCreate.mockResolvedValue(completion('1. Este RAV4 tiene un precio excelente.'))
+    const result = await translateNarrationLines(['This RAV4 is priced at $28,900.'], 'es')
+    expect(result).toEqual(['This RAV4 is priced at $28,900.'])
+  })
+
+  it('keeps a translation that preserves every number exactly', async () => {
+    mockCreate.mockResolvedValue(completion('1. Este RAV4 tiene un precio de $28,900.'))
+    const result = await translateNarrationLines(['This RAV4 is priced at $28,900.'], 'es')
+    expect(result).toEqual(['Este RAV4 tiene un precio de $28,900.'])
+  })
+
+  it('falls back to the original lines when the LLM call throws', async () => {
+    mockCreate.mockRejectedValue(new Error('rate limited'))
+    const result = await translateNarrationLines(['Hello world'], 'es')
+    expect(result).toEqual(['Hello world'])
+  })
+})
+
+describe('localizedPresetScenes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockHasLlmKey.mockReturnValue(true)
+  })
+
+  it('carries over keywords/searchQuery/duration/visualElements unchanged, replacing only narration', async () => {
+    mockCreate.mockResolvedValue(completion('1. Este RAV4 tiene un precio de $28,900.'))
+    const scenes = [
+      scene({
+        keywords: ['suv', 'driveway'],
+        searchQuery: 'suv in driveway',
+        visualElements: ['car', 'house'],
+        duration: 6,
+      }),
+    ]
+    const [planned] = await localizedPresetScenes(scenes, 'es')
+    expect(planned.narration).toBe('Este RAV4 tiene un precio de $28,900.')
+    expect(planned.keywords).toEqual(['suv', 'driveway'])
+    expect(planned.searchQuery).toBe('suv in driveway')
+    expect(planned.duration).toBe(6)
+    expect(planned.visualElements).toEqual(['car', 'house'])
+    expect(planned.description).toBe(scenes[0].description)
+  })
+
+  it('translates the description as narration when a scene has no explicit narration', async () => {
+    mockCreate.mockResolvedValue(completion('1. Un coche en una entrada.'))
+    const scenes = [scene({ narration: undefined, description: 'A car in a driveway' })]
+    const [planned] = await localizedPresetScenes(scenes, 'es')
+    expect(planned.narration).toBe('Un coche en una entrada.')
+  })
+})
