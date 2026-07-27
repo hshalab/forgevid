@@ -32,6 +32,19 @@ export function isAdminRole(role: UserRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
+/**
+ * The fresh-session admin check for route handlers that read the acting
+ * admin's identity (unlike the withAdmin wrapper, which hides it). Returns
+ * the session user when they are an admin, null otherwise — the caller
+ * turns null into its 403. Extracted once this reached three copy-pasted
+ * occurrences (admin/leads, admin/beta-access, admin/payments).
+ */
+export async function requireAdmin(): Promise<SessionUser | null> {
+  const user = await getFreshSessionUser();
+  if (!user || !isAdminRole(user.role)) return null;
+  return user;
+}
+
 export async function getFreshSessionUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authOptions);
 

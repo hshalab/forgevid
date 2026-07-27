@@ -23,35 +23,67 @@ judging purposes.
 To (re)set the password before submitting, run once with a password you
 choose: `JUDGE_DEMO_PASSWORD='...' DATABASE_URL=<railway-url> npx tsx
 scripts/seed-judge-demo.ts` — then paste that same password into the
-submission form's private field, never here.
+submission form's private field, never here. The seed also preloads three
+deterministic sample inventory items (an SUV, a home listing, a product
+SKU) so the Growth Operator has something real to reason about on first
+login.
 
 ## What's simulated vs. real
 
 Everything you do with this account is **real**: real Gemini calls, real
 rendering, real cost incurred. Nothing is mocked or faked to look good for
-judges. The only thing "prepared" in advance is that this account exists
-and is unlocked (no payment wall, no beta-invite gate) — beyond that,
-you're generating actual new videos live.
+judges. Two things are prepared in advance: the account exists and is
+unlocked (no payment wall), and three clearly-labeled demo inventory items
+("ForgeVid Demo SUV" etc.) are preloaded so the AI-operated business loop
+is demonstrable without waiting on a live dealer feed. All video
+generation, Gemini decisions, approvals, and analytics you trigger happen
+live, from zero.
 
-## Suggested 3-minute path
+## Guided tour (recommended): the AI-operated business loop
 
-1. **Log in** at forgevid.com → you land on `/dashboard`.
-2. Go to **AI Studio** (`/dashboard/ai`). Paste any real website URL (a
-   product page, a business homepage — try your own company's site, or
-   `https://www.forgevid.com` itself). ForgeVid reads the page and drafts a
-   brief from its actual content — nothing invented.
-3. Click **Generate Video**. This is a live Gemini call (script, hook, and
-   scene plan), followed by real rendering (stock/site footage + AI
-   voiceover + word-timed captions). Expect ~1-2 minutes.
-4. Switch the language to Spanish and generate again (or use `--lang both`
-   if testing via the CLI tools) to see the same content narrated in
-   natural Spanish, not a subtitle translation.
-5. Visit **Ad Studio** (`/dashboard/ad-studio`) → generate a hook/CTA
-   matrix for a campaign, mark a variant as a winner, enter a ROAS value.
-   This is the closed-loop experiment tracking: every variant records
-   which hook/CTA/aspect ratio was tried and what won.
-6. Visit **Templates** (`/dashboard/templates`) to see the reusable
-   template library a business would build on for repeat content.
+Log in and open **Judge Tour** in the sidebar (`/dashboard/judge` — the
+link is only shown to this account). It walks the four-step loop:
+
+1. **Growth recommendations** (`/dashboard/recommendations`) — the three
+   demo inventory items, scored by the configurable opportunity model, and
+   a **"Get Gemini decision"** button: a live, structured Gemini call that
+   picks which item to campaign on and why (audience, hooks, CTA,
+   languages), grounded only in the persisted inventory and any measured
+   prior results — with its rationale shown inline.
+2. **Generate the campaign** — one click renders the decision's bilingual
+   (EN/ES) creative variants. Spanish is generated natively by the
+   pipeline, not subtitle-translated. Expect ~1–2 minutes per video; that
+   is real ffmpeg rendering, not a stall.
+3. **Approvals** (`/dashboard/approvals`) — nothing goes public
+   autonomously. Approve a creative (rights confirmation required) to
+   activate its public landing page and QR code; every approval event is
+   recorded in an append-only, hash-linked evidence chain.
+4. **Impact** (`/dashboard/analytics`) — real per-account queries (leads,
+   conversions, cost-per-lead, attributed revenue, time saved). This
+   starts near zero and populates as your session generates activity —
+   deliberately: it computes from real rows, never mock data.
+
+The **"Reset demo workspace"** button on the tour page restores the
+account to exactly the three starting inventory items at any time (it
+deletes only this demo account's data — production evidence is untouched,
+and the reset itself is logged to the evidence chain).
+
+## Alternate 3-minute path: the core video product
+
+1. Go to **AI Studio** (`/dashboard/ai`). Paste any real website URL —
+   ForgeVid reads the page and drafts a grounded brief from its actual
+   content, nothing invented. Click **Generate Video** (live Gemini script
+   + real render with stock/site footage, AI voiceover, word-timed
+   captions).
+2. Switch the narration language to Spanish and generate again to hear
+   native Spanish narration.
+3. Visit **Ad Studio** (`/dashboard/ad-studio`) for the hook/CTA
+   experiment matrix, and **Templates** (`/dashboard/templates`) for the
+   reusable library.
+4. Also in AI Studio: the **Frontier AI** tab is the opt-in, credit-billed
+   text-to-video path (Runway / Google Veo / ByteDance Seedance / Kuaishou
+   Kling through one integration) — distinct from the free stock-footage
+   assembler.
 
 ## Known limitations (stated plainly, not hidden)
 
@@ -59,8 +91,12 @@ you're generating actual new videos live.
   if it feels slow, that's ffmpeg actually working, not a stall.
 - Stock footage quality depends on Pexels' catalog for the query terms
   Gemini picks; a very niche topic may get generic B-roll.
-- This account has no video history pre-loaded — you're seeing the
-  product cold, the same way a new customer does on day one.
+- Analytics/impact figures start near zero on a fresh reset — they compute
+  from your session's real activity, because pre-faking them would defeat
+  the point of an evidence-first product.
+- The Frontier AI tab requires provider credits on the Runway account; if
+  generation errors with a credit message, that path is temporarily
+  unfunded (the free stock-footage path is unaffected).
 
 ## Support
 

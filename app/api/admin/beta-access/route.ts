@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getFreshSessionUser, isAdminRole } from '@/lib/rbac'
+import { requireAdmin } from '@/lib/rbac'
 import { getStoredBetaAccessEntries, isBetaModeEnabled } from '@/lib/beta-access'
 
 const createEntrySchema = z.object({
@@ -19,15 +19,6 @@ const updateEntrySchema = z.object({
 const deleteEntrySchema = z.object({
   id: z.string().min(1),
 })
-
-async function requireAdmin() {
-  const user = await getFreshSessionUser()
-  if (!user || !isAdminRole(user.role)) {
-    return null
-  }
-
-  return user
-}
 
 export async function GET() {
   const admin = await requireAdmin()

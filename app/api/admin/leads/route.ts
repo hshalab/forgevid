@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getFreshSessionUser, isAdminRole } from '@/lib/rbac'
+import { requireAdmin } from '@/lib/rbac'
 
 const LEAD_STATUSES = ['NEW', 'SAMPLE_SENT', 'REPLIED', 'MEETING', 'PILOT', 'PAID', 'RETAINED', 'DEAD'] as const
 
@@ -30,12 +30,6 @@ const updateLeadSchema = z.object({
 const deleteLeadSchema = z.object({
   id: z.string().min(1),
 })
-
-async function requireAdmin() {
-  const user = await getFreshSessionUser()
-  if (!user || !isAdminRole(user.role)) return null
-  return user
-}
 
 export async function GET() {
   const admin = await requireAdmin()

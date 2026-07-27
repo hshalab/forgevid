@@ -1,0 +1,34 @@
+name: Finance reconciliation cron
+
+# Appends one dated, hash-linked P&L snapshot per UTC day to the append-only
+# evidence chain (arms-length revenue, related-party exclusions, refunds, AI
+# cost, operating cost, net). The endpoint is idempotent per UTC day, so a
+# re-fire is a cheap no-op.
+#
+# Auth is a Bearer CRON_SECRET (GitHub Actions secret, must match Railway's
+# CRON_SECRET env var). While the org's Actions billing lock persists,
+# scripts/finance-cron.cmd is the fallback trigger via Windows Task Scheduler.
+
+on:
+  schedule:
+    - cron: '30 23 * * *' # daily at 23:30 UTC, before the day rolls over
+  workflow_dispatch: {} # manual trigger for verification
+
+permissions: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/finance-reconciliation
+        run: |
+          code=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "https://www.forgevid.com/api/cron/finance-reconciliation" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $code"
+          cat response.json
+          if [ "$code" != "200" ]; then
+            echo "Cron endpoint returned $code" >&2
+            exit 1
+          fi

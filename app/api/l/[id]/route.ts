@@ -41,8 +41,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'An email or phone number is required so the business can reach you.' }, { status: 400 });
   }
 
-  const creative = await prisma.adCreative.findUnique({ where: { id: params.id }, select: { id: true } });
-  if (!creative) {
+  // Same gate the landing page enforces (app/l/[id]/page.tsx): only the
+  // approved current revision accepts leads. Without this, a rejected or
+  // since-revised creative's page would 404 while a direct POST here still
+  // recorded events against it — an approval bypass for anyone who kept
+  // the URL.
+  const creative = await prisma.adCreative.findUnique({
+    where: { id: params.id },
+    select: { id: true, approvalStatus: true, approvedRevision: true, revision: true },
+  });
+  if (!creative || creative.approvalStatus !== 'APPROVED' || creative.approvedRevision !== creative.revision) {
     return NextResponse.json({ error: 'This link is no longer active.' }, { status: 404 });
   }
 

@@ -10,6 +10,7 @@ const TYPE_LABEL: Record<string, string> = {
   SCRIPT_WRITING: 'Script writing',
   VOICE_SYNTHESIS: 'Voice synthesis',
   IMAGE_GENERATION: 'Image generation',
+  GROWTH_DECISION: 'Growth decision',
 }
 
 function truncate(text: string | null, max: number): string {

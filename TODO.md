@@ -1536,3 +1536,84 @@ Gates: tsc clean, 413 tests green (60 suites), build clean.
 UI will render but real generation fails until billing is set up on
 Runway's dashboard); unlock GitHub org billing; send the eligibility email
 (`evidence/XPRIZE-ELIGIBILITY-EMAIL.txt`).
+
+## 2026-07-27 (cont'd) — full code-verification of the timeline list; 6 gaps found and closed
+
+The user pushed back that "the list still has things not implemented" — and
+per this repo's own rule (status documents lie; code doesn't), the earlier
+audit had leaned on GROWTH-OPERATOR-IMPLEMENTATION-AUDIT.md's claims. So:
+three parallel review agents verified EVERY code item from the
+submission-deadline timeline against the actual codebase, file:line by
+file:line. Verdict: the measurable loop (inventory intelligence, Gemini
+decisions, approval inbox, tracked links/QR, attribution,
+results→next-recommendation) and the evidence systems (revenue/expense
+ledgers, related-party splits, CSV/JSON/PDF exports, SHA-256 append-only
+chain with real DB triggers, testimonial consent, the passing
+no-autonomous-outreach compliance test) are genuinely implemented — those
+claims held. Six real gaps did not, all fixed:
+
+- **Judge landed on empty states**: `scripts/seed-judge-demo.ts` created
+  only the user+subscription; the 3 demo inventory items existed only in
+  the reset route. Extracted `lib/judge-demo.ts` (one dataset shared by
+  seed and reset — drift between "what seed creates" and "what reset
+  restores" would make the tour behave differently on first login) and the
+  seed now preloads inventory when the judge has none, without clobbering
+  a mid-session judge on password rotation.
+- **JUDGE-TESTING-INSTRUCTIONS.md had diverged from the shipped product**:
+  it documented the old AI-Studio-only path and claimed a cold account,
+  never mentioning the judge tour page, the reset button, the demo
+  inventory, or the Frontier AI tab. Rewritten around the actual guided
+  loop (recommendations → generate → approvals → impact), with the honest
+  caveats kept (analytics start near zero by design; Frontier AI needs
+  Runway credits).
+- **Approval bypass on lead capture**: `POST /api/l/[id]` accepted direct
+  POSTs for creatives that were rejected or revised-since-approval — the
+  landing page enforced approved-current-revision, the API behind it
+  didn't. Now the same gate (404 unless
+  `approvalStatus=APPROVED && approvedRevision=revision`); 2 new tests.
+- **No edit path for Payment related-party classification**: leads had a
+  per-row toggle; Stripe Payment rows could only be reclassified by direct
+  DB edits — contradicting the stated "flagged per-row" methodology and
+  leaving no audit trail. New `GET/PATCH /api/admin/payments` (admin-gated,
+  company-wide ledger deliberately NOT per-admin-scoped unlike leads) +
+  a payments table with the toggle on the admin evidence page; every flip
+  appends a `payment.related_party_flag` record to the evidence chain.
+  5 new tests.
+- **"Reconcile costs and revenue daily" had no daily artifact**:
+  reconciliation was event-driven (webhooks) + on-demand views only. New
+  `POST /api/cron/finance-reconciliation` (CRON_SECRET-gated, idempotent
+  per UTC day) appends one dated, hash-linked P&L snapshot
+  (`finance.daily_reconciliation`: arms-length vs related-party revenue,
+  refunds, outbound lead revenue, AI cost, operating cost, net) to the
+  append-only chain. Trigger pair matches the inventory cron:
+  `.github/workflows/finance-reconciliation.yml` (daily 23:30 UTC, blocked
+  until the org's Actions billing unlock) + `scripts/finance-cron.cmd`
+  Windows Task Scheduler fallback (register with the schtasks line in the
+  file). 5 new tests.
+- Minor: admin AI-decisions page's type filter omitted `GROWTH_DECISION`
+  (growth decisions only appeared under "All" with a raw enum label).
+
+**A review pass on this diff itself caught a critical money bug before it
+shipped**: the first draft of the reconciliation cron (and the payments
+table UI) assumed `Payment.amount` is stored in cents — it's DOLLARS (the
+Stripe webhook divides by 100 at write time), so the permanent hash-chain
+would have recorded all Stripe revenue 100x too small, with tests green
+only because the mocks shared the wrong unit. Fixed by having the cron
+snapshot `getHackathonEvidence()`'s own summary instead of re-aggregating
+— which also eliminated two subtler scoping divergences the reviewer found
+(the cron counted payments from pre-hackathon/deleted users that the
+evidence page excludes, and used a stricter lead-revenue filter), so the
+daily chain entry now provably agrees with the admin page, CSV, and signed
+exports. Same pass: compare-and-set on the payment flag flip (a concurrent
+flip can no longer append an evidence record whose `from` never matched
+the row), and `requireAdmin` hoisted into lib/rbac.ts at its third
+copy-paste (payments, leads, beta-access all refactored onto it).
+
+Gates: tsc clean, **426 tests green (62 suites, up from 413/60)**, build
+clean with both new routes in the manifest.
+
+**User actions this round adds:** register the finance cron fallback once
+(`schtasks` line at the top of `scripts/finance-cron.cmd`) — or just
+unlock GitHub Actions billing and both crons run themselves; re-run
+`scripts/seed-judge-demo.ts` against production before submitting so the
+judge account gets the preloaded inventory.

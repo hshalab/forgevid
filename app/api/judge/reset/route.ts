@@ -3,8 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { appendEvidence } from '@/lib/evidence-ledger'
-
-const JUDGE_EMAIL = 'judge@forgevid.com'
+import { JUDGE_DEMO_DATASET, JUDGE_DEMO_INVENTORY, JUDGE_DEMO_SEEN_AT, JUDGE_EMAIL } from '@/lib/judge-demo'
 
 export async function POST() {
   const session = await getServerSession(authOptions)
@@ -27,14 +26,10 @@ export async function POST() {
     await tx.impactAssumption.deleteMany({ where: { userId } })
     await tx.video.deleteMany({ where: { userId } })
 
-    const seenAt = new Date('2026-07-01T12:00:00.000Z')
-    const samples = [
-      { vertical: 'auto', externalRef: 'JUDGE-AUTO-001', label: '2024 ForgeVid Demo SUV', priceText: '$31,900', photoCount: 6 },
-      { vertical: 'realestate', externalRef: 'JUDGE-HOME-001', label: '1925 Demo Street, Miami, FL', priceText: '$625,000', photoCount: 8 },
-      { vertical: 'ecom', externalRef: 'JUDGE-SKU-001', label: 'ForgeVid Demo Travel Bag', priceText: '$89', photoCount: 5 },
-    ]
-    for (const sample of samples) {
-      await tx.inventoryItem.create({ data: { userId, ...sample, firstSeenAt: seenAt, lastSeenAt: seenAt } })
+    for (const sample of JUDGE_DEMO_INVENTORY) {
+      await tx.inventoryItem.create({
+        data: { userId, ...sample, firstSeenAt: JUDGE_DEMO_SEEN_AT, lastSeenAt: JUDGE_DEMO_SEEN_AT },
+      })
     }
   })
   await appendEvidence({
@@ -42,7 +37,7 @@ export async function POST() {
     entityType: 'User',
     entityId: userId,
     actorUserId: userId,
-    payload: { dataset: 'judge-demo-v1', inventoryItems: 3, genuineEvidenceAffected: false },
+    payload: { dataset: JUDGE_DEMO_DATASET, inventoryItems: JUDGE_DEMO_INVENTORY.length, genuineEvidenceAffected: false },
   })
   return NextResponse.json({
     ok: true,

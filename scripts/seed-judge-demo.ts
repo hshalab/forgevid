@@ -23,7 +23,7 @@
 import { loadEnvConfig } from '@next/env';
 loadEnvConfig(process.cwd());
 
-const JUDGE_EMAIL = 'judge@forgevid.com';
+import { JUDGE_DEMO_INVENTORY, JUDGE_DEMO_SEEN_AT, JUDGE_EMAIL } from '../lib/judge-demo';
 
 async function main() {
   const password = process.env.JUDGE_DEMO_PASSWORD;
@@ -71,6 +71,24 @@ async function main() {
       },
     });
     console.log(`Subscription: created (${sub.id}), pro plan, active for 1 year`);
+  }
+
+  // Preload the deterministic demo inventory ONLY when the judge has none —
+  // a first login must never land on empty states (the guided tour's first
+  // step is the scored inventory), but re-running the seed to rotate the
+  // password must not wipe whatever the judge generated mid-session. The
+  // in-product reset button (POST /api/judge/reset) is the wipe mechanism,
+  // and restores exactly this same lib/judge-demo dataset.
+  const inventoryCount = await prisma.inventoryItem.count({ where: { userId: user.id } });
+  if (inventoryCount === 0) {
+    for (const sample of JUDGE_DEMO_INVENTORY) {
+      await prisma.inventoryItem.create({
+        data: { userId: user.id, ...sample, firstSeenAt: JUDGE_DEMO_SEEN_AT, lastSeenAt: JUDGE_DEMO_SEEN_AT },
+      });
+    }
+    console.log(`Inventory: preloaded ${JUDGE_DEMO_INVENTORY.length} demo items (judge-demo-v1)`);
+  } else {
+    console.log(`Inventory: ${inventoryCount} items already present, left as-is`);
   }
 
   console.log('\nDone. Login instructions are in evidence/JUDGE-TESTING-INSTRUCTIONS.md');

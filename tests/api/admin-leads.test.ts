@@ -46,10 +46,21 @@ jest.mock('next/server', () => {
   }
 })
 
-jest.mock('@/lib/rbac', () => ({
-  getFreshSessionUser: jest.fn(),
-  isAdminRole: jest.fn((role: string) => role === 'ADMIN'),
-}))
+jest.mock('@/lib/rbac', () => {
+  const getFreshSessionUser = jest.fn()
+  const isAdminRole = jest.fn((role: string) => role === 'ADMIN')
+  return {
+    getFreshSessionUser,
+    isAdminRole,
+    // Mirrors the real requireAdmin so tests keep driving auth through
+    // getFreshSessionUser's mocked session.
+    requireAdmin: jest.fn(async () => {
+      const user = await getFreshSessionUser()
+      if (!user || !isAdminRole(user.role)) return null
+      return user
+    }),
+  }
+})
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {

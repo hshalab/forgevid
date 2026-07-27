@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { getHackathonEvidence } from '@/lib/hackathon-evidence'
 import { verifyEvidenceLedger } from '@/lib/evidence-ledger'
+import PaymentsLedger from './payments-ledger'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,7 @@ export default async function HackathonEvidencePage() {
           <CardContent className="text-2xl font-bold">${relatedPartyTotal.toFixed(2)}</CardContent>
         </Card>
       )}
+      <PaymentsLedger />
       <Card>
         <CardHeader><CardTitle>Append-only integrity chain</CardTitle></CardHeader>
         <CardContent className="space-y-2 text-sm">

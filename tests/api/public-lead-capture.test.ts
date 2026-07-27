@@ -70,7 +70,12 @@ function params(id = 'creative-1') {
 describe('Public lead capture (/api/l/[id])', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockedAdCreative.findUnique.mockResolvedValue({ id: 'creative-1' } as any)
+    mockedAdCreative.findUnique.mockResolvedValue({
+      id: 'creative-1',
+      approvalStatus: 'APPROVED',
+      approvedRevision: 2,
+      revision: 2,
+    } as any)
     mockedCreativeEvent.create.mockResolvedValue({ id: 'event-1' } as any)
   })
 
@@ -93,6 +98,24 @@ describe('Public lead capture (/api/l/[id])', () => {
   it('404s for a creative that does not exist, without creating an event', async () => {
     mockedAdCreative.findUnique.mockResolvedValue(null)
     const response = await POST(req({ email: 'buyer@example.com' }, '10.0.0.3'), params('does-not-exist'))
+    expect(response.status).toBe(404)
+    expect(mockedCreativeEvent.create).not.toHaveBeenCalled()
+  })
+
+  it('404s for a creative that is not approved — same gate as the landing page', async () => {
+    mockedAdCreative.findUnique.mockResolvedValue({
+      id: 'creative-1', approvalStatus: 'PENDING', approvedRevision: null, revision: 1,
+    } as any)
+    const response = await POST(req({ email: 'buyer@example.com' }, '10.0.0.30'), params())
+    expect(response.status).toBe(404)
+    expect(mockedCreativeEvent.create).not.toHaveBeenCalled()
+  })
+
+  it('404s when the creative was revised after approval (stale approval)', async () => {
+    mockedAdCreative.findUnique.mockResolvedValue({
+      id: 'creative-1', approvalStatus: 'APPROVED', approvedRevision: 1, revision: 2,
+    } as any)
+    const response = await POST(req({ email: 'buyer@example.com' }, '10.0.0.31'), params())
     expect(response.status).toBe(404)
     expect(mockedCreativeEvent.create).not.toHaveBeenCalled()
   })
