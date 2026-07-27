@@ -79,6 +79,17 @@ export function allowsVideoDubbing(plan: Plan): boolean {
   return plan === 'pro' || plan === 'enterprise' || plan === 'custom';
 }
 
+/**
+ * Frontier AI video generation (Runway/Veo/Seedance/Kling via Runway's API)
+ * bills ~$0.12/second — roughly 14x an avatar render per second — so it's
+ * its own gate, priced via a much higher purchased-credit cost rather than a
+ * stricter plan tier, matching how allowsVideoDubbing handles its own (much
+ * smaller) cost premium over avatars.
+ */
+export function allowsFrontierGeneration(plan: Plan): boolean {
+  return plan === 'pro' || plan === 'enterprise' || plan === 'custom';
+}
+
 /** Custom branding (logo overlay, intro/outro) is a paid feature. */
 export function allowsCustomBranding(plan: Plan): boolean {
   return isPaidPlan(plan);

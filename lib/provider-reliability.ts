@@ -1,6 +1,6 @@
 import { CircuitBreakerRegistry } from './circuit-breaker'
 
-export type ProviderName = 'llm' | 'openai' | 'elevenlabs' | 'pexels' | 'heygen' | 'cloudinary'
+export type ProviderName = 'llm' | 'openai' | 'elevenlabs' | 'pexels' | 'heygen' | 'cloudinary' | 'runway'
 
 const settings: Record<ProviderName, { failureThreshold: number; recoveryTimeout: number; monitoringPeriod: number }> = {
   llm: { failureThreshold: 3, recoveryTimeout: 60_000, monitoringPeriod: 15_000 },
@@ -9,6 +9,7 @@ const settings: Record<ProviderName, { failureThreshold: number; recoveryTimeout
   pexels: { failureThreshold: 5, recoveryTimeout: 45_000, monitoringPeriod: 10_000 },
   heygen: { failureThreshold: 3, recoveryTimeout: 120_000, monitoringPeriod: 20_000 },
   cloudinary: { failureThreshold: 4, recoveryTimeout: 60_000, monitoringPeriod: 15_000 },
+  runway: { failureThreshold: 3, recoveryTimeout: 120_000, monitoringPeriod: 20_000 },
 }
 
 export function providerBreaker(provider: ProviderName) {

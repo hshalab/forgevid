@@ -48,10 +48,27 @@ function blocked(result: unknown): string[] {
     .map(([cat]) => cat);
 }
 
-/** Moderate free text (a prompt or feed narration). Fails OPEN on error. */
-export async function moderateText(text: string): Promise<ModerationResult> {
+/**
+ * Moderate free text (a prompt or feed narration). Fails OPEN on error by
+ * default — an outage must not take down all generation, and most callers'
+ * text still passes through a later step (a script rewrite, stock-footage
+ * matching) that is its own chance to catch something bad.
+ *
+ * Pass `{ failClosed: true }` for a route where this text becomes the
+ * ACTUAL generated content with no further review — e.g. a prompt sent
+ * straight to a real, billed image/video-generation provider — so a
+ * moderation-service outage can't become a free pass to unmoderated,
+ * paid generation. Mirrors moderateImageUrl's existing fail-closed default.
+ */
+export async function moderateText(
+  text: string,
+  opts: { failClosed?: boolean } = {},
+): Promise<ModerationResult> {
   const trimmed = (text || '').trim();
-  if (!trimmed || !hasOpenAiKey()) return OK;
+  if (!trimmed) return OK;
+  if (!hasOpenAiKey()) {
+    return opts.failClosed ? { allowed: false, categories: [], reason: 'Content could not be verified.' } : OK;
+  }
   try {
     const openai = await client();
     const res = await withProviderReliability('openai', () =>
@@ -61,8 +78,8 @@ export async function moderateText(text: string): Promise<ModerationResult> {
     console.warn('[Moderation] text blocked:', hits.join(', '));
     return { allowed: false, categories: hits, reason: 'This request was blocked by our content policy.' };
   } catch (error) {
-    console.error('[Moderation] text check failed (allowing):', error);
-    return OK; // fail-open for text availability
+    console.error(`[Moderation] text check failed (${opts.failClosed ? 'blocking' : 'allowing'}):`, error);
+    return opts.failClosed ? { allowed: false, categories: [], reason: 'Content could not be verified.' } : OK;
   }
 }
 

@@ -24,6 +24,15 @@ export const RATES = {
   avatarPerMinute: 0.5,
   /** HeyGen video-translate (dub + lip-sync an existing video), per minute of source. */
   dubPerMinute: 2.0,
+  /**
+   * Runway frontier video generation, per second of output. Only gen4.5's
+   * rate is actually published/verified; applied uniformly to every model
+   * on the curated list (lib/runway-provider.ts) since third-party (Veo/
+   * Seedance/Kling) per-model pricing through Runway's markup isn't
+   * published anywhere this could verify — conservative estimate, not an
+   * invoice, same as every other rate in this file.
+   */
+  runwayPerSecond: 0.12,
 };
 
 export interface CostInputs {
@@ -33,6 +42,7 @@ export interface CostInputs {
   renderSeconds?: number;
   avatarSeconds?: number;
   dubSeconds?: number;
+  runwaySeconds?: number;
 }
 
 export interface CostBreakdown extends Required<CostInputs> {
@@ -46,6 +56,7 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
   const renderSeconds = Math.max(0, inputs.renderSeconds ?? 0);
   const avatarSeconds = Math.max(0, inputs.avatarSeconds ?? 0);
   const dubSeconds = Math.max(0, inputs.dubSeconds ?? 0);
+  const runwaySeconds = Math.max(0, inputs.runwaySeconds ?? 0);
 
   const totalUsd =
     (gptTokens / 1000) * RATES.gptPer1kTokens +
@@ -53,7 +64,8 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
     (whisperSeconds / 60) * RATES.whisperPerMinute +
     (renderSeconds / 60) * RATES.renderPerMinute +
     (avatarSeconds / 60) * RATES.avatarPerMinute +
-    (dubSeconds / 60) * RATES.dubPerMinute;
+    (dubSeconds / 60) * RATES.dubPerMinute +
+    runwaySeconds * RATES.runwayPerSecond;
 
   return {
     gptTokens,
@@ -62,6 +74,7 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
     renderSeconds,
     avatarSeconds,
     dubSeconds,
+    runwaySeconds,
     totalUsd: Number(totalUsd.toFixed(6)),
   };
 }

@@ -27,6 +27,7 @@ describe('provider reliability', () => {
       'provider:pexels',
       'provider:heygen',
       'provider:cloudinary',
+      'provider:runway',
     ]))
     expect(stats.every((entry) => entry.state === 'CLOSED')).toBe(true)
   })
