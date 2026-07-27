@@ -18,7 +18,7 @@
  * Relative imports only — reachable from the worker process.
  */
 
-import { spawnSync } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
 
 let cachedPath: string | undefined;
 let cachedFilters: Set<string> | undefined;
@@ -107,14 +107,35 @@ export function supportsFilter(name: string): boolean {
  * ffmpeg-static), so callers that need stream info or detection-filter output
  * (see quality-gate.ts) parse ffmpeg's own text banner/filter logs instead of
  * a separate probe call.
+ *
+ * Async (execFile, not spawnSync): this pipeline can run inline in the
+ * Next.js API process as a fire-and-forget fallback when Redis isn't
+ * configured (see generation-pipeline.ts) — a synchronous spawn here would
+ * block that whole process's event loop, stalling every other concurrent
+ * request for as long as ffmpeg takes to analyze the file, not just this
+ * one's render. A non-zero exit (e.g. a probe-only `-f null -` run) still
+ * carries the analysis output on the error object, so it resolves either way
+ * — the text is what callers parse, not the exit code.
  */
-export function runFfmpeg(args: string[], timeoutMs = 120_000): string {
-  const res = spawnSync(resolveFfmpegPath(), args, {
-    encoding: 'utf8',
-    maxBuffer: 32 * 1024 * 1024,
-    timeout: timeoutMs,
+export function runFfmpeg(args: string[], timeoutMs = 120_000): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(
+      resolveFfmpegPath(),
+      args,
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: timeoutMs },
+      // execFile still hands back stdout/stderr on a non-zero exit — a
+      // probe-only `-f null -` run often exits that way — so a truthy
+      // `error` here is never a reason to discard what ffmpeg printed.
+      (_error, stdout, stderr) => resolve(`${stderr ?? ''}${stdout ?? ''}`),
+    );
   });
-  return `${res.stderr ?? ''}${res.stdout ?? ''}`;
+}
+
+/** Parse the duration ffmpeg -i prints to its banner (stderr), in seconds. 0 if absent/unparseable. */
+export function parseDurationSeconds(bannerText: string): number {
+  const match = bannerText.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
 /** Test hook. */

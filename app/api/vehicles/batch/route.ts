@@ -8,6 +8,7 @@ import { runFeedBatch, type FeedItem } from '@/lib/feed-batch';
 import { markRemovedItems } from '@/lib/inventory';
 import {
   VehicleParseError,
+  enrichVehicleFromVin,
   parseVehicleFeed,
   vehicleLowerThird,
   vehiclePrompt,
@@ -100,6 +101,11 @@ export async function POST(req: NextRequest) {
     console.error('[vehicles] feed fetch failed:', error);
     return NextResponse.json({ error: 'Could not read that feed' }, { status: 502 });
   }
+
+  // Free, best-effort: a dealer feed that gives us a VIN but skimps on
+  // year/make/model/trim gets those backfilled from NHTSA's public decoder.
+  // A no-op per vehicle when nothing is missing or `ref` isn't VIN-shaped.
+  vehicles = await Promise.all(vehicles.map((v) => enrichVehicleFromVin(v)));
 
   if (vehicles.length > MAX_VEHICLES) {
     return NextResponse.json(

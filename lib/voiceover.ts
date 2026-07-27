@@ -21,7 +21,7 @@ import { createHash } from 'crypto';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { resolveFfmpegPath } from './ffmpeg-env';
+import { parseDurationSeconds, resolveFfmpegPath } from './ffmpeg-env';
 import { DEFAULT_TTS_MODEL, DEFAULT_VOICE_ID } from './voice-catalog';
 import { withProviderReliability } from './provider-reliability';
 
@@ -59,9 +59,7 @@ export function probeAudioSeconds(file: string): number {
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
   });
-  const m = `${result.stderr ?? ''}`.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/);
-  if (!m) return 0;
-  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  return parseDurationSeconds(`${result.stderr ?? ''}`);
 }
 
 /**

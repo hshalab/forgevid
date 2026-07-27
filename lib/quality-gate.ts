@@ -11,7 +11,7 @@
  * when the resolved ffmpeg build doesn't expose them — a missing filter
  * degrades the check, it never fails the render.
  */
-import { runFfmpeg, supportsFilter } from './ffmpeg-env';
+import { parseDurationSeconds, runFfmpeg, supportsFilter } from './ffmpeg-env';
 import type { ResolvedScene } from './video-generator';
 
 export type QualityIssueCode =
@@ -47,12 +47,9 @@ export interface QualityExpectations {
   requireAudio: boolean;
 }
 
-function probeStreamInfo(filePath: string) {
-  const out = runFfmpeg(['-hide_banner', '-i', filePath]);
-  const durMatch = out.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
-  const durationSec = durMatch
-    ? Number(durMatch[1]) * 3600 + Number(durMatch[2]) * 60 + Number(durMatch[3])
-    : null;
+async function probeStreamInfo(filePath: string) {
+  const out = await runFfmpeg(['-hide_banner', '-i', filePath]);
+  const durationSec = parseDurationSeconds(out) || null;
   const resMatch = out.match(/Video:.*?(\d{2,5})x(\d{2,5})/);
   const width = resMatch ? Number(resMatch[1]) : null;
   const height = resMatch ? Number(resMatch[2]) : null;
@@ -60,38 +57,56 @@ function probeStreamInfo(filePath: string) {
   return { durationSec, width, height, hasAudio };
 }
 
-function detectBlack(filePath: string): { totalSec: number; ranges: Array<{ start: number; end: number }> } {
-  if (!supportsFilter('blackdetect')) return { totalSec: 0, ranges: [] };
-  const out = runFfmpeg(['-hide_banner', '-i', filePath, '-vf', 'blackdetect=d=0.5:pic_th=0.98', '-an', '-f', 'null', '-']);
-  const ranges: Array<{ start: number; end: number }> = [];
-  for (const m of out.matchAll(/black_start:([\d.]+)\s+black_end:([\d.]+)/g)) {
-    ranges.push({ start: Number(m[1]), end: Number(m[2]) });
-  }
-  const totalSec = ranges.reduce((n, r) => n + (r.end - r.start), 0);
-  return { totalSec, ranges };
+interface RangeResult {
+  totalSec: number;
+  ranges: Array<{ start: number; end: number }>;
 }
 
-function detectFreeze(filePath: string): { totalSec: number; ranges: Array<{ start: number; end: number }> } {
-  if (!supportsFilter('freezedetect')) return { totalSec: 0, ranges: [] };
-  const out = runFfmpeg(['-hide_banner', '-i', filePath, '-vf', 'freezedetect=n=-60dB:d=2', '-an', '-f', 'null', '-']);
-  const starts = [...out.matchAll(/freeze_start:\s*([\d.]+)/g)].map((m) => Number(m[1]));
-  const ends = [...out.matchAll(/freeze_end:\s*([\d.]+)/g)].map((m) => Number(m[1]));
+/**
+ * Shared shape for blackdetect and freezedetect: both print a start/end pair
+ * per flagged segment (blackdetect on one line; freezedetect's start and end
+ * arrive as separate progress lines) — either way, matching start/end markers
+ * independently and pairing them by array index covers both correctly, since
+ * each filter always emits a segment's start before its end.
+ */
+async function detectFilterRanges(
+  filePath: string,
+  filterName: string,
+  vf: string,
+  startKey: string,
+  endKey: string,
+): Promise<RangeResult> {
+  if (!supportsFilter(filterName)) return { totalSec: 0, ranges: [] };
+  const out = await runFfmpeg(['-hide_banner', '-i', filePath, '-vf', vf, '-an', '-f', 'null', '-']);
+  const starts = [...out.matchAll(new RegExp(`${startKey}:\\s*([\\d.]+)`, 'g'))].map((m) => Number(m[1]));
+  const ends = [...out.matchAll(new RegExp(`${endKey}:\\s*([\\d.]+)`, 'g'))].map((m) => Number(m[1]));
   const ranges: Array<{ start: number; end: number }> = [];
   for (let i = 0; i < Math.min(starts.length, ends.length); i++) ranges.push({ start: starts[i], end: ends[i] });
-  const totalSec = ranges.reduce((n, r) => n + (r.end - r.start), 0);
-  return { totalSec, ranges };
+  return { totalSec: ranges.reduce((n, r) => n + (r.end - r.start), 0), ranges };
 }
 
-function detectSilence(filePath: string): { totalSec: number; count: number } {
+const detectBlack = (filePath: string) =>
+  detectFilterRanges(filePath, 'blackdetect', 'blackdetect=d=0.5:pic_th=0.98', 'black_start', 'black_end');
+
+const detectFreeze = (filePath: string) =>
+  detectFilterRanges(filePath, 'freezedetect', 'freezedetect=n=-60dB:d=2', 'freeze_start', 'freeze_end');
+
+async function detectSilence(filePath: string): Promise<{ totalSec: number; count: number }> {
   if (!supportsFilter('silencedetect')) return { totalSec: 0, count: 0 };
-  const out = runFfmpeg(['-hide_banner', '-i', filePath, '-af', 'silencedetect=noise=-35dB:d=1', '-vn', '-f', 'null', '-']);
+  const out = await runFfmpeg(['-hide_banner', '-i', filePath, '-af', 'silencedetect=noise=-35dB:d=1', '-vn', '-f', 'null', '-']);
   const durations = [...out.matchAll(/silence_duration:\s*([\d.]+)/g)].map((m) => Number(m[1]));
   return { totalSec: durations.reduce((n, v) => n + v, 0), count: durations.length };
 }
 
 /** Analyze a finished local render against what it was supposed to be. */
-export function runQualityGate(filePath: string, expected: QualityExpectations): QualityReport {
-  const probed = probeStreamInfo(filePath);
+export async function runQualityGate(filePath: string, expected: QualityExpectations): Promise<QualityReport> {
+  // Independent ffmpeg passes over the same file — run concurrently rather
+  // than paying for four sequential full-file decodes.
+  const [probed, black, freeze] = await Promise.all([
+    probeStreamInfo(filePath),
+    detectBlack(filePath),
+    detectFreeze(filePath),
+  ]);
   const issues: QualityIssue[] = [];
 
   if (!probed.durationSec || probed.durationSec <= 0) {
@@ -129,7 +144,6 @@ export function runQualityGate(filePath: string, expected: QualityExpectations):
     score -= 40;
   }
 
-  const black = detectBlack(filePath);
   if (black.totalSec > Math.max(1, probed.durationSec * 0.08)) {
     issues.push({
       code: 'black_frames',
@@ -140,7 +154,6 @@ export function runQualityGate(filePath: string, expected: QualityExpectations):
     score -= 35;
   }
 
-  const freeze = detectFreeze(filePath);
   if (freeze.totalSec > Math.max(1.5, probed.durationSec * 0.1)) {
     issues.push({
       code: 'frozen_frames',
@@ -152,7 +165,7 @@ export function runQualityGate(filePath: string, expected: QualityExpectations):
   }
 
   if (expected.requireAudio && probed.hasAudio) {
-    const silence = detectSilence(filePath);
+    const silence = await detectSilence(filePath);
     if (silence.totalSec > probed.durationSec * 0.6) {
       issues.push({
         code: 'silent_audio',

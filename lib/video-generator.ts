@@ -43,7 +43,7 @@ import {
   type TransitionConfig,
 } from './transitions';
 import { safeFetch } from './safe-fetch';
-import { resolveFfmpegPath, supportsFilter } from './ffmpeg-env';
+import { parseDurationSeconds, resolveFfmpegPath, supportsFilter } from './ffmpeg-env';
 import { buildKenBurnsFilter, directionForScene } from './ken-burns';
 import type { UserMediaItem } from './user-media';
 import { withProviderReliability } from './provider-reliability';
@@ -368,9 +368,7 @@ function probeDurationSeconds(filePath: string): number {
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
   });
-  const match = `${result.stderr ?? ''}`.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/);
-  if (!match) return 0;
-  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return parseDurationSeconds(`${result.stderr ?? ''}`);
 }
 
 /** Re-encode a clip to the render's frame size/fps so concat is seamless. */
@@ -1622,7 +1620,7 @@ export async function assembleVideo(
 
     // Check the local file BEFORE persisting — persistGeneratedVideo deletes it
     // once uploaded, and there is nothing to inspect afterward.
-    const quality = runQualityGate(outputPath, {
+    const quality = await runQualityGate(outputPath, {
       expectedDurationSec: timelineDuration,
       expectedWidth: outW,
       expectedHeight: outH,

@@ -27,6 +27,7 @@ import {
   type FeedShape,
 } from './feed-core';
 import type { LowerThird } from './lower-third';
+import { decodeVin, looksLikeVin, type VinDecodeResult } from './vin-decoder';
 
 export interface Vehicle {
   /** The dealer's own stock number or VIN, echoed back so they can match rows. */
@@ -43,6 +44,15 @@ export interface Vehicle {
   /** Free-text selling points from the dealer's own listing copy. */
   highlights?: string;
   photos: string[];
+  /**
+   * True when `title` was built from year/make/model/trim because the feed
+   * had no title field of its own — never set for a feed-supplied or
+   * user-submitted explicit title. VIN enrichment uses this to know whether
+   * recomposing the title (once more parts are filled in) is safe, instead of
+   * re-deriving the same fact by re-running composeTitle() and string-
+   * comparing, which would misfire if a real title happened to match that format.
+   */
+  titleComposed?: boolean;
 }
 
 export class VehicleParseError extends Error {
@@ -93,7 +103,8 @@ const VEHICLE_SHAPE: FeedShape<Vehicle> = {
     const trim = asText(pick(record, ALIASES.trim));
     const ref = asText(pick(record, ALIASES.ref)) ?? `feed-${index + 1}`;
 
-    const title = asText(pick(record, ALIASES.title)) ?? composeTitle({ year, make, model, trim });
+    const explicitTitle = asText(pick(record, ALIASES.title));
+    const title = explicitTitle ?? composeTitle({ year, make, model, trim });
     if (!title) {
       throw new VehicleParseError(`Feed entry ${index + 1} (${ref}): no title, make, or model`);
     }
@@ -104,6 +115,7 @@ const VEHICLE_SHAPE: FeedShape<Vehicle> = {
     return {
       ref,
       title,
+      titleComposed: !explicitTitle,
       year,
       make,
       model,
@@ -123,6 +135,49 @@ export function parseVehicleFeed(text: string, contentType = ''): Vehicle[] {
     if (error instanceof FeedParseError) throw new VehicleParseError(error.message);
     throw error;
   }
+}
+
+/** Turn body style / drivetrain / fuel type into a short factual line. */
+function describeVinExtras(decoded: VinDecodeResult): string | undefined {
+  const parts = [decoded.bodyClass, decoded.driveType, decoded.fuelType].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
+/**
+ * Best-effort enrichment for a vehicle that already parsed successfully (has a
+ * title, and photos) but is missing detail fields a free NHTSA VIN decode can
+ * fill in — dealer feeds vary wildly in completeness. NEVER overwrites a field
+ * the feed already provided; the feed is the dealer's own representation of
+ * the car (see the module doc above and legal/terms-of-service.md 6.3).
+ *
+ * A no-op when `ref` isn't VIN-shaped, nothing is actually missing, or the
+ * decode fails/times out — callers can run this unconditionally over a batch.
+ */
+export async function enrichVehicleFromVin(vehicle: Vehicle): Promise<Vehicle> {
+  const missingSomething = !vehicle.year || !vehicle.make || !vehicle.model || !vehicle.trim;
+  if (!missingSomething || !looksLikeVin(vehicle.ref)) return vehicle;
+
+  const decoded = await decodeVin(vehicle.ref);
+  if (!decoded) return vehicle;
+
+  const year = vehicle.year ?? decoded.year;
+  const make = vehicle.make ?? decoded.make;
+  const model = vehicle.model ?? decoded.model;
+  const trim = vehicle.trim ?? decoded.trim;
+
+  // Only rebuild the headline from parts when the feed's title WAS composed
+  // from them — an explicit dealer-supplied title always wins.
+  const title = vehicle.titleComposed ? composeTitle({ year, make, model, trim }) || vehicle.title : vehicle.title;
+
+  return {
+    ...vehicle,
+    year,
+    make,
+    model,
+    trim,
+    title,
+    highlights: vehicle.highlights ?? describeVinExtras(decoded),
+  };
 }
 
 /** The generation prompt: facts only, and an explicit ban on inventing them. */

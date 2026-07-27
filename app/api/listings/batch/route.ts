@@ -14,6 +14,7 @@ import {
 import { parseListingsFeed } from '@/lib/mls-feed';
 import { FetchLimitError, SsrfError, safeFetch, withDefaultScheme } from '@/lib/safe-fetch';
 import { decodeHtmlBody, parseSiteHtml } from '@/lib/site-extract';
+import { checkFairHousing } from '@/lib/fair-housing';
 
 /**
  * POST /api/listings/batch — an estate agent's whole spreadsheet at once.
@@ -150,7 +151,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       preview: true,
       count: listings.length,
-      items: listings.map((l) => ({ ref: l.ref, label: l.address, photos: l.photos.length })),
+      items: listings.map((l) => {
+        // Advisory only (see lib/fair-housing.ts) — surfaced here so the agent
+        // reviews it BEFORE approving generation, not after paying for a render.
+        const fairHousingFlags = checkFairHousing(l.highlights);
+        return {
+          ref: l.ref,
+          label: l.address,
+          photos: l.photos.length,
+          ...(fairHousingFlags.length > 0 ? { fairHousingFlags } : {}),
+        };
+      }),
     });
   }
   if (!parsed.data.approvedByUser) {
