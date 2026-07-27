@@ -1248,3 +1248,80 @@ attempted, not stubbed:**
 Gates: `npx tsc --noEmit` clean at every commit, `npm run build` clean at
 every commit, full jest suite green throughout (241 → 326 tests). Every
 feature above shipped with its own test file, none merged red.
+
+## 2026-07-27 (cont'd) — asked to keep going: closed the ad-measurement loop for real
+
+Told to "proceed" after the triage above. Surveyed what already existed
+(two Explore agents) before building anything, since the roadmap's ad-
+measurement and integration asks turned out to be partly already covered
+and partly closeable without the OAuth access that was the actual blocker.
+
+- **Found dead code impersonating real integrations.** `lib/advanced-
+  integrations.ts` (`IntegrationManager.setupShopifyIntegration`/
+  `setupHubSpotIntegration`) had zero importers anywhere in the repo,
+  stored state in an in-process `Map` (lost on restart, never Prisma),
+  and had no real OAuth exchange — confirmed via `initialize()` sitting
+  dead at module scope, never called. `lib/analytics.ts` (a UTM-capture
+  class) was equally unreferenced, never wired to the `/l/[id]` share
+  flow. Deleted both rather than leave something that reads as a working
+  feature.
+- **Ad-platform measurement, the honest version.** No business-verified
+  Meta/TikTok/Google Ads API access exists (that's still the real
+  blocker), but a real conversion-tracking system already did:
+  `AdCreative`/`GrowthConversion` plus a CSV import
+  (`/api/growth-operator/conversions/import`) — revenue per creative,
+  self-reported, never inferred. What was missing was the OTHER half:
+  spend. `AdCreative` gained `totalSpendCents/totalImpressions/
+  totalClicks` (two migrations — the second renaming from `spendCents`
+  etc. to make "life-to-date total, not a period delta" explicit at the
+  type level, applied before either had any real production data).
+  `POST /api/growth-operator/creative-performance/import` accepts that
+  CSV — exported from whichever ad dashboard the customer already has —
+  and `lib/ad-performance.ts` computes real ROAS and marks a campaign's
+  winning creative, wired to recompute after every conversion or spend
+  write. `roas`/`isWinner` on `AdCreative` had existed since the ad-
+  variation engine shipped (2026-07-10) but nothing had ever written to
+  them automatically until now.
+- **WooCommerce/BigCommerce**, honestly scoped: `lib/product-feed.ts`
+  already covered Google Merchant XML and Shopify/generic JSON; added
+  the real field names those two REST APIs actually use
+  (`regular_price`/`short_description` for WooCommerce,
+  `calculated_price`/`url_standard`/`url_zoom` for BigCommerce) rather
+  than claiming a full integration neither has real OAuth for.
+- **Two review passes before pushing** (4 agents total, reuse/
+  simplification/efficiency/altitude then a security-focused pass),
+  each catching something real before it shipped:
+  - `recomputeCampaignPerformance` was unconditionally overwriting
+    `roas`/`isWinner` to null/false for any creative with no imported
+    spend, silently destroying a value set via the pre-existing manual
+    `PATCH /api/ad-studio/creatives/[id]` endpoint. Fixed to only touch
+    creatives with real spend for `roas`.
+  - Security pass then found the fix above still let a STALE
+    `isWinner: true` survive if a creative's spend was later corrected
+    to zero, producing two winners in one campaign with no race
+    required — `isWinner` is now a true campaign-wide invariant
+    (cleared everywhere once real data exists anywhere in the
+    campaign), while `roas` itself stays untouched for a spend-less
+    creative.
+  - The new import route wrote up to 1000 rows one-by-one inside a
+    single `$transaction` (a long-held DB connection for no reason,
+    since each row is independent) — dropped the transaction wrapper in
+    both the route and `recomputeCampaignPerformance`.
+  - The exact same CSV-parse-plus-ownership-check shape existed twice
+    (the new spend import and the existing conversions import) —
+    extracted `lib/csv-import.ts` once it was duplicated a second time,
+    not before.
+- Both migrations applied directly to production (Railway Postgres, via
+  the public proxy — the internal hostname isn't reachable outside
+  Railway's network) before pushing; `prisma migrate status` confirmed
+  fully in sync afterward both times.
+
+Gates: tsc clean, full build clean, jest green throughout (326 → 364
+tests) at every commit in this round.
+
+**Still genuinely blocked, unchanged:** live Meta/TikTok/Google/LinkedIn
+Ads API pulls (needs business-verified ad accounts), Shopify/HubSpot/
+Salesforce OAuth (needs an app registered under this business), SOC2/
+pentest (needs a paid external firm), HeyGen dubbing (no translate
+endpoint wired up), frontier video-model router (needs Runway/Veo/Kling
+keys).
