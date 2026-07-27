@@ -34,7 +34,7 @@ const LANGUAGES = Object.keys(NARRATION_LANGUAGE_NAMES) as NarrationLanguage[];
 
 const bodySchema = z.object({
   targetLanguage: z.enum(LANGUAGES as [NarrationLanguage, ...NarrationLanguage[]]),
-  voiceId: z.string().optional(),
+  voiceId: z.string().max(200).optional(),
 });
 
 export async function POST(req: NextRequest, props: { params: Promise<{ videoId: string }> }) {

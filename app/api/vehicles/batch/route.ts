@@ -102,17 +102,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not read that feed' }, { status: 502 });
   }
 
-  // Free, best-effort: a dealer feed that gives us a VIN but skimps on
-  // year/make/model/trim gets those backfilled from NHTSA's public decoder.
-  // A no-op per vehicle when nothing is missing or `ref` isn't VIN-shaped.
-  vehicles = await Promise.all(vehicles.map((v) => enrichVehicleFromVin(v)));
-
+  // Enforce the batch cap BEFORE enrichment: parseVehicleFeed has no row-count
+  // limit of its own (only the 8MB body cap on the feed fetch), so a compact
+  // feed can carry thousands of VIN-shaped rows. Enriching first would fan out
+  // an unbounded number of concurrent NHTSA calls before this check ever ran.
   if (vehicles.length > MAX_VEHICLES) {
     return NextResponse.json(
       { error: `At most ${MAX_VEHICLES} vehicles per batch (got ${vehicles.length})` },
       { status: 413 },
     );
   }
+
+  // Free, best-effort: a dealer feed that gives us a VIN but skimps on
+  // year/make/model/trim gets those backfilled from NHTSA's public decoder.
+  // A no-op per vehicle when nothing is missing or `ref` isn't VIN-shaped.
+  vehicles = await Promise.all(vehicles.map((v) => enrichVehicleFromVin(v)));
 
   if (parsed.data.preview) {
     return NextResponse.json({
