@@ -1436,3 +1436,41 @@ picked per-video, priced in credits, never a replacement for the free path.
 
 Gates: `tsc --noEmit` clean, full `jest` suite (409 tests, up from 389),
 `next build` clean.
+
+## 2026-07-27 (cont'd) — dedicated 6-dimension security review of the Runway diff
+
+Ran a focused review of `96097f6..c9e50f0` against six named dimensions:
+prompt injection, cost-exhaustion bounds, authorization, injection (SQL/
+NoSQL/command/log), quota ordering, and SSRF.
+
+**Five of six came back clean**, confirmed against the actual code (not
+assumed): `promptText` only ever reaches Runway via `JSON.stringify`, never
+a raw query or a logged value; `Video.userId`/`taskId`/`video.id` are
+server-derived everywhere, never client input; no `$queryRaw`; the exact
+call sequence in the route is auth → zod → configured-check → quota →
+plan-gate → moderation → the real spend → DB row → settle → poll, so
+nothing is consumed before Runway accepts the job; Runway's returned
+`output` URL is only ever written to the DB and returned as JSON, never
+re-fetched server-side, so `lib/safe-fetch.ts`'s SSRF guard has nothing to
+bypass because there's no server-side fetch of it to guard.
+
+**One real, Low-severity, non-blocking finding**: neither of
+`lib/runway-provider.ts`'s two `fetch()` calls sets an explicit timeout, so
+a slow (not failing) Runway response can hold the quota-check-then-settle
+window open longer than the avatar/dub baseline, and `consumeCredit`
+(`lib/credits.ts`) settles with no compare-against-balance guard — so
+deliberate concurrent-request abuse by an already-authenticated user could
+produce a modestly larger overspend than elsewhere in the app.
+**Deliberately not patched in isolation**: checked `lib/avatar-provider.ts`
+and `lib/video-translate.ts` — neither of THEIR provider `fetch()` calls
+sets a timeout either. This is the exact same systemic, pre-existing
+pattern across every provider client, not something the Runway diff
+introduced; fixing it only in `runway-provider.ts` would be an inconsistent
+one-off patch on a shared pattern, the same call already made for the
+quota TOCTOU race itself. Backlogged together: an explicit per-provider
+fetch timeout + a compare-and-set (or per-user in-flight lock) on the
+credit ledger, addressed platform-wide if/when the systemic quota race is
+ever tackled — not route-by-route.
+
+No code changes from this pass; nothing to re-verify beyond what the
+Runway commit already gates.
