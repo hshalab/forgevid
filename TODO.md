@@ -1325,3 +1325,56 @@ Salesforce OAuth (needs an app registered under this business), SOC2/
 pentest (needs a paid external firm), HeyGen dubbing (no translate
 endpoint wired up), frontier video-model router (needs Runway/Veo/Kling
 keys).
+
+## 2026-07-27 (cont'd) — HeyGen dubbing turned out NOT to be blocked
+
+Re-examined "HeyGen dubbing (no translate endpoint wired up)" from the list
+above before accepting it as blocked. It wasn't — HeyGen's v3 Video Translate
+API dubs (voice clone + lip-sync) ANY finished video on the SAME
+HEYGEN_API_KEY already configured for avatar rendering; no new account, no
+new key. Verified the actual endpoint/schema live via
+developers.heygen.com's own reference docs (fetched and quoted in
+lib/video-translate.ts) before writing any integration code, rather than
+guessing a contract for a paid API — WebFetch initially kept landing on a
+generic migration-guide shell page; a plain web search surfaced the real
+`POST /v3/video-translations` reference, which then fetched cleanly.
+
+- `lib/video-translate.ts` + `POST /api/videos/[videoId]/dub`: dubs an
+  existing completed video, gated Pro+ (a new `allowsVideoDubbing`, not the
+  avatar-specific `allowsAvatars` — dubbing needs no avatar). This is the
+  premium sibling to `lib/localize.ts` from earlier in the day: that one
+  re-narrates over the same stock footage for free (no face, no lip-sync
+  needed); this one actually syncs a mouth, which only matters — and only
+  costs real HeyGen dollars (~$2/min, ~4x avatar rendering) — for an
+  avatar-presenter video.
+- **`/simplify` caught a real financial-code duplication and I treated it
+  as an exception to the "extract at 3 occurrences" rule used everywhere
+  else this session**: the new dub route's poll loop and the existing
+  avatar route's poll loop were ~90% identical, including the refund/
+  credit-back logic on failure — a missed parallel edit there is a real
+  money bug, not an aesthetic one. Extracted `lib/provider-job-poll.ts`
+  and refactored BOTH routes onto it (confirmed via `git diff` that the
+  avatar route's refund/cost behavior came out byte-for-byte identical).
+- Also fixed, same review pass: cost and the new video's duration were
+  keyed off the SOURCE video's duration, never HeyGen's actual dubbed-
+  output length (translated speech runs a different length than the
+  source) — HeyGen's own status response has a `duration` field; now used
+  for real billing, with the pre-flight-only estimate refusing a video
+  with no recorded duration rather than defaulting to a guess. Standardized
+  the "derived from" metadata key (`sourceVideoId`/`variantType`) across
+  this route and the localize route, which had each invented its own name.
+- Security review: authorization, SSRF (traced every `Video.fileUrl` write
+  site — always Cloudinary/provider-generated, never attacker-supplied),
+  and quota-before-spend ordering all came back clean. One finding — a
+  check-then-settle race that could let concurrent requests slip past
+  quota — was confirmed by the reviewer to be **pre-existing**, shared with
+  the avatar route and effectively every quota-gated route in the codebase.
+  That's a systemic quota-architecture question across the whole app, not
+  a one-route patch; flagged, not fixed here.
+
+Gates: tsc clean, full build clean, jest green (382 → 389 tests).
+
+**Blocked list, corrected:** frontier video-model router, Shopify/HubSpot/
+Salesforce OAuth, live ad-platform API pulls, and SOC2/pentest remain
+genuinely blocked on external accounts/budget. HeyGen dubbing is no longer
+on that list.
