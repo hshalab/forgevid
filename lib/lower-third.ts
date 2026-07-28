@@ -125,3 +125,44 @@ export function buildLowerThirdFilter(
 
   return filters.join(',');
 }
+
+/**
+ * Animated opening title — the brand name in big condensed type for the
+ * first ~2.5 seconds, the way produced social ads open. Fades in with a
+ * slight upward settle, holds, fades out before the second scene.
+ *
+ * Prefers the bundled Bebas Neue (condensed display face made for exactly
+ * this); falls back to the caption font. Same fail-soft contract as the
+ * lower third: no font or no text -> '' (dropped overlay, never a dead
+ * render). Deliberately NOT combined with a lower third by callers — two
+ * title treatments in the opening seconds fight each other.
+ */
+export function buildOpenerTitleFilter(
+  text: string,
+  options: { fontFile?: string | null } = {},
+): string {
+  const title = text.trim().toUpperCase();
+  if (!title) return '';
+  const bundledBebas = pathJoinPublicFont('BebasNeue-Regular.ttf');
+  const font = options.fontFile ?? bundledBebas ?? resolveCaptionFontFile();
+  if (!font) return '';
+  const fontOpt = `fontfile='${escapeFontPath(font)}':`;
+  // Fade in over 0.4s, hold to 2.0s, fade out by 2.5s; settle upward ~2% of
+  // frame height as it appears. All timing via t so it survives any fps.
+  const alpha = `if(lt(t,0.4),t/0.4,if(lt(t,2.0),1,max(0,(2.5-t)/0.5)))`;
+  const y = `(h*0.40)-((h*0.02)*min(t/0.4,1))`;
+  return (
+    `drawtext=${fontOpt}text='${escapeDrawText(title)}':` +
+    `fontsize=h*0.11:fontcolor=white:borderw=3:bordercolor=black@0.45:` +
+    `x=(w-text_w)/2:y=${y}:alpha='${alpha}':enable='lt(t,2.5)'`
+  );
+}
+
+/** The bundled font path when it exists, else null. */
+function pathJoinPublicFont(file: string): string | null {
+  // Lazy require keeps this module's import surface unchanged.
+  const path = require('path') as typeof import('path');
+  const fs = require('fs') as typeof import('fs');
+  const full = path.join(process.cwd(), 'public', 'fonts', file);
+  return fs.existsSync(full) ? full : null;
+}

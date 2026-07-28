@@ -141,6 +141,8 @@ export default function AIFeaturesPage() {
   const [forgeVidEndCard, setForgeVidEndCard] = useState(false)
   // Best-of-3 storyboards: plan 3 candidates, auto-score, render the winner.
   const [bestOfStoryboards, setBestOfStoryboards] = useState(false)
+  // AI hero opening: first scene becomes a real gen4.5 clip (+1 credit, Pro).
+  const [heroShot, setHeroShot] = useState(false)
   const [pipAssetId, setPipAssetId] = useState<string | null>(null)
   const [pipName, setPipName] = useState<string>("")
   const [uploadingPip, setUploadingPip] = useState(false)
@@ -363,6 +365,7 @@ export default function AIFeaturesPage() {
           renderQuality: quality,
           forgeVidEndCard,
           ...(bestOfStoryboards ? { planCandidates: 3 } : {}),
+          ...(heroShot ? { heroShot: true } : {}),
           transition:
             transitionType === "none" ? null : { type: transitionType, duration: 0.5 },
         }),
@@ -694,6 +697,14 @@ export default function AIFeaturesPage() {
                       <div>
                         <label htmlFor="best-of-storyboards" className="text-sm font-medium cursor-pointer">Best-of-3 storyboards</label>
                         <p className="text-xs text-muted-foreground">Plans three candidate storyboards, auto-scores them, and renders only the winner. Slightly slower to start; same render cost.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 rounded-md border border-gray-700 p-3">
+                      <Checkbox id="hero-shot" checked={heroShot} onCheckedChange={(checked) => setHeroShot(Boolean(checked))} />
+                      <div>
+                        <label htmlFor="hero-shot" className="text-sm font-medium cursor-pointer">AI hero opening (+1 credit, Pro)</label>
+                        <p className="text-xs text-muted-foreground">Opens with a real AI-generated cinematic clip of your subject (Runway Gen-4.5) instead of stock footage. Falls back to stock if generation fails — you're only charged when it works.</p>
                       </div>
                     </div>
 

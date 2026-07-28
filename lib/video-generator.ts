@@ -48,8 +48,9 @@ import { buildKenBurnsFilter, directionForScene } from './ken-burns';
 import type { UserMediaItem } from './user-media';
 import { withProviderReliability } from './provider-reliability';
 import { proofreadLines } from './proofread';
+import { generateHeroClip, HERO_DURATION_SECONDS } from './hero-shot';
 import { buildSceneQueries } from './stock-query';
-import { buildLowerThirdFilter, type LowerThird } from './lower-third';
+import { buildLowerThirdFilter, buildOpenerTitleFilter, type LowerThird } from './lower-third';
 import {
   buildAlignedNarration,
   concatSceneVoiceovers,
@@ -264,6 +265,14 @@ export interface GenerationOptions {
   aspectRatio?: AspectRatio;
   /** Mood tag used to pick a music track; defaults to `style`. */
   mood?: string;
+  /**
+   * Replace the opening scene's stock clip with a REAL generated gen4.5
+   * clip (lib/hero-shot.ts). Costs real Runway spend — callers gate and
+   * bill it (+1 credit in /api/ai). Fail-open to stock.
+   */
+  heroShot?: boolean;
+  /** Animated opening brand title (see AssembleOptions.openerTitle). */
+  openerTitle?: string | null;
   /** ElevenLabs voice id for the narration. */
   voiceId?: string;
   /** Narration + caption language ('es' = Spanish). Stock search stays English. */
@@ -990,6 +999,11 @@ export interface AssembleOptions {
   language?: NarrationLanguage;
   /** Visual style ('modern'|'cinematic'|'energetic'|'professional') — selects the color grade. */
   visualStyle?: string;
+  /**
+   * Big animated brand/title text for the opening ~2.5s (Bebas Neue).
+   * Ignored when lowerThird is present — two title treatments fight.
+   */
+  openerTitle?: string | null;
   /** Plan-gated branding: watermark, logo, intro/outro, caption colour/font. */
   branding?: Branding | null;
   /** Cross-fade between scenes. Pass null for hard cuts. */
@@ -1464,12 +1478,18 @@ export async function assembleVideo(
         })
       : '';
 
+    // Animated opening title — only when no lower third claims the open.
+    const openerFilter =
+      options.openerTitle && !options.lowerThird
+        ? buildOpenerTitleFilter(options.openerTitle, { fontFile: brandFontFile })
+        : '';
+
     // Split at the PiP boundary: `fit` must run before the presenter overlay,
     // but text (captions, lower third, watermark) must draw AFTER it — or the
     // presenter clip covers the captions (seen in a real frame, not theory).
     // The color grade rides with `fit` — footage gets graded, text does not.
     const preOverlayFilter = [fit, gradeFor(options.visualStyle)].filter(Boolean).join(',');
-    const textOverlayFilter = [lowerThirdFilter, textFilter, watermarkFilter]
+    const textOverlayFilter = [openerFilter, lowerThirdFilter, textFilter, watermarkFilter]
       .filter(Boolean)
       .join(',');
 
@@ -1690,6 +1710,8 @@ export async function generateVideoWithScenes(
   cues: CaptionCue[];
   thumbnailUrl: string | null;
   quality: QualityReport;
+  /** True when the AI hero opening actually rendered (billing/ledger signal). */
+  heroUsed: boolean;
 }> {
   const {
     prompt,
@@ -1754,6 +1776,31 @@ export async function generateVideoWithScenes(
     new Set(options.excludeClipUrls ?? []),
   );
 
+  // AI hero shot: swap the opening scene's stock clip for a real generated
+  // gen4.5 clip. Caller-billed and fail-open — on any failure the stock
+  // opening stands (lib/hero-shot.ts).
+  let heroUsed = false;
+  let heroTempPath: string | null = null;
+  if (options.heroShot && resolved.length > 0) {
+    const hero = await generateHeroClip({
+      searchQuery: resolved[0].searchQuery || resolved[0].description,
+      style: options.style,
+      aspectRatio: aspectRatio === '9:16' || aspectRatio === '1:1' ? aspectRatio : '16:9',
+    });
+    if (hero) {
+      heroTempPath = hero.localPath;
+      resolved[0] = {
+        ...resolved[0],
+        clipUrl: hero.localPath,
+        mediaType: 'video',
+        // The clip is exactly HERO_DURATION_SECONDS long; never ask the
+        // trim for more footage than exists.
+        duration: Math.min(resolved[0].duration, HERO_DURATION_SECONDS),
+      };
+      heroUsed = true;
+    }
+  }
+
   // Music is opt-out. The user's own track wins; otherwise fall back to the
   // bundled library, which is silently skipped when empty (no track is licensed).
   const wantMusic = !addOns || addOns.length === 0 || addOns.includes('music');
@@ -1768,6 +1815,7 @@ export async function generateVideoWithScenes(
     transition,
     language: options.language,
     visualStyle: options.style,
+    openerTitle: options.openerTitle ?? null,
     renderQuality: options.renderQuality,
     voiceoverPath: options.voiceoverPath ?? null,
     lowerThird: options.lowerThird ?? null,
@@ -1818,8 +1866,13 @@ export async function generateVideoWithScenes(
 
   console.log(
     `[Video Generator] ✅ Generated ${aspectRatio} video with ${assembled.scenes.length} scenes` +
-      (assembled.quality.passed ? '' : ` (quality gate: ${assembled.quality.score}/100)`),
+      (assembled.quality.passed ? '' : ` (quality gate: ${assembled.quality.score}/100)`) +
+      (heroUsed ? ' (AI hero opening)' : ''),
   );
+  // The hero temp clip has been consumed into the render — clean it up.
+  if (heroTempPath) {
+    try { fs.unlinkSync(heroTempPath); } catch { /* best-effort */ }
+  }
   // Return the scenes as RENDERED (narration-paced durations, per-scene thumbs)
   // so what gets persisted matches the video.
   return {
@@ -1828,6 +1881,7 @@ export async function generateVideoWithScenes(
     cues: assembled.cues,
     thumbnailUrl: assembled.thumbnailUrl,
     quality: assembled.quality,
+    heroUsed,
   };
 }
 

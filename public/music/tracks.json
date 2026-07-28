@@ -1,7 +1,7 @@
 [
   {
     "id": "calm-bed",
-    "title": "Still (generated)",
+    "title": "Still Waters (ElevenLabs)",
     "moods": [
       "calm",
       "professional",
@@ -9,31 +9,43 @@
       "corporate",
       "sad"
     ],
-    "file": "calm-bed.m4a",
-    "license": "Generated from sine tones by scripts/make-music-beds.ts. No rights reserved."
+    "file": "calm-bed.mp3",
+    "license": "Original audio generated with ElevenLabs sound-generation (paid plan, commercial license) by scripts/make-eleven-beds.ts."
   },
   {
     "id": "uplift-bed",
-    "title": "Lift (generated)",
+    "title": "Open Road (ElevenLabs)",
     "moods": [
       "happy",
       "energetic",
       "uplifting",
       "bright"
     ],
-    "file": "uplift-bed.m4a",
-    "license": "Generated from sine tones by scripts/make-music-beds.ts. No rights reserved."
+    "file": "uplift-bed.mp3",
+    "license": "Original audio generated with ElevenLabs sound-generation (paid plan, commercial license) by scripts/make-eleven-beds.ts."
   },
   {
     "id": "cinematic-bed",
-    "title": "Wide (generated)",
+    "title": "Skyline (ElevenLabs)",
     "moods": [
       "cinematic",
       "dramatic",
       "premium",
       "epic"
     ],
-    "file": "cinematic-bed.m4a",
-    "license": "Generated from sine tones by scripts/make-music-beds.ts. No rights reserved."
+    "file": "cinematic-bed.mp3",
+    "license": "Original audio generated with ElevenLabs sound-generation (paid plan, commercial license) by scripts/make-eleven-beds.ts."
+  },
+  {
+    "id": "luxury-bed",
+    "title": "Estate (ElevenLabs)",
+    "moods": [
+      "luxury",
+      "elegant",
+      "sophisticated",
+      "real-estate"
+    ],
+    "file": "luxury-bed.mp3",
+    "license": "Original audio generated with ElevenLabs sound-generation (paid plan, commercial license) by scripts/make-eleven-beds.ts."
   }
 ]

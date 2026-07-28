@@ -15,7 +15,7 @@ import { resolveVoiceIdForUser } from '@/lib/cloned-voices';
 import { DEFAULT_TRANSITION, TRANSITIONS } from '@/lib/transitions';
 import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
 import { moderateText, recordModerationBlock } from '@/lib/moderation';
-import { allows4k } from '@/lib/plan';
+import { allows4k, allowsFrontierGeneration } from '@/lib/plan';
 import { withRenderSlot } from '@/lib/render-semaphore';
 import { withProviderReliability } from '@/lib/provider-reliability';
 
@@ -94,6 +94,9 @@ const generateVideoSchema = z.object({
   // Best-of-N storyboards: plan 2-3 candidates, auto-score, render the
   // winner (lib/plan-candidates.ts). Extra LLM tokens only, no render cost.
   planCandidates: z.number().int().min(1).max(3).default(1),
+  // AI hero opening: the first scene becomes a REAL generated gen4.5 clip
+  // (lib/hero-shot.ts). Real Runway spend -> +1 credit and Pro-gated below.
+  heroShot: z.boolean().default(false),
   // Presenter picture-in-picture: a VIDEO MediaAsset overlaid in a corner,
   // muted — pair with narrationAssetId for the presenter's voice.
   pip: z
@@ -149,8 +152,10 @@ async function handleGenerateVideo(body: any, userId: string) {
   }
 
   // Quota gate: every generation costs GPT + TTS + Whisper + compute. The
-  // rejection names the limit so it doubles as upgrade pressure.
-  const quota = await checkGenerationQuota(userId, input.duration);
+  // rejection names the limit so it doubles as upgrade pressure. An AI hero
+  // opening adds real Runway spend (gen4.5 5s = 1 credit, same price the
+  // Frontier tab charges for that exact clip).
+  const quota = await checkGenerationQuota(userId, input.duration, input.heroShot ? 2 : 1);
   if (!quota.allowed) {
     return NextResponse.json(
       {
@@ -160,6 +165,19 @@ async function handleGenerateVideo(body: any, userId: string) {
         upgradeRequired: quota.upgradeRequired ?? false,
       },
       { status: 429 },
+    );
+  }
+
+  // The hero opening spends frontier-model money — same Pro+ gate as the
+  // Frontier tab itself.
+  if (input.heroShot && !allowsFrontierGeneration(quota.plan)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `The AI hero opening requires the Pro plan (you are on ${quota.plan})`,
+        upgradeRequired: true,
+      },
+      { status: 403 },
     );
   }
 
@@ -210,6 +228,7 @@ async function handleGenerateVideo(body: any, userId: string) {
             mediaOnly: input.mediaOnly,
             lowerThird: input.lowerThird ?? null,
             planCandidates: input.planCandidates,
+            heroShot: input.heroShot,
             // enableEmotionAware is preserved for the pipeline to honor once
             // emotion-aware generation is folded into the worker (TODO Phase 5).
             enableEmotionAware: input.enableEmotionAware ?? false,

@@ -224,6 +224,8 @@ async function main() {
     if (!sceneVoiceovers) throw new Error('narration synthesis failed (ELEVENLABS_API_KEY?)');
 
     const { videoUrl } = await assembleVideo(resolved as any, ['voiceover', 'subtitles'], opts.aspect, {
+      // Big animated brand-name opener (Bebas Neue) — the produced-ad look.
+      openerTitle: brand,
       sceneVoiceovers,
       voiceId: process.env.ELEVENLABS_VOICE_ID ?? null,
       transition: null,

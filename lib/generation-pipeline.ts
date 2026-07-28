@@ -244,6 +244,10 @@ export interface GenerationInput {
    * of machine translations. `details` surfaces on the review card.
    */
   reviewHold?: { reason: string; details?: unknown } | null;
+  /** AI hero opening (gen4.5, +1 credit — gated and billed in /api/ai). */
+  heroShot?: boolean;
+  /** Animated opening brand title (Bebas Neue, first ~2.5s). */
+  openerTitle?: string | null;
 }
 
 export type GenerationStage =
@@ -371,6 +375,7 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
   let scriptTokens = 0;
   let ledgerScenes: ResolvedScene[] = [];
 
+  let heroCostSeconds = 0;
   const settle = async (succeeded: boolean, prompt: string) => {
     if (!owner) return;
     const narrationChars = ledgerScenes.reduce((n, s) => n + s.description.length, 0);
@@ -386,6 +391,8 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
         ttsChars: narrationChars,
         whisperSeconds: renderSeconds,
         renderSeconds,
+        // The AI hero opening is real per-second Runway spend when used.
+        ...(heroCostSeconds > 0 ? { runwaySeconds: heroCostSeconds, runwayModel: 'gen4.5' } : {}),
       }),
     });
   };
@@ -433,8 +440,10 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
       }
     }
 
-    const { videoUrl, scenes, cues, thumbnailUrl, quality } = await generateVideoWithScenes({
+    const { videoUrl, scenes, cues, thumbnailUrl, quality, heroUsed } = await generateVideoWithScenes({
       prompt: script,
+      heroShot: input.heroShot,
+      openerTitle: input.openerTitle ?? null,
       style: input.style,
       duration: input.duration,
       addOns: input.addOns ?? [],
@@ -466,6 +475,7 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
       forgeVidEndCard: input.forgeVidEndCard,
     });
     ledgerScenes = scenes;
+    if (heroUsed) heroCostSeconds = 5;
 
     await setStage(videoId, 'uploading');
 
