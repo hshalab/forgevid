@@ -8,11 +8,14 @@ jest.mock('@/lib/runway-provider', () => ({
   createTextToVideo: jest.fn(),
   getRunwayTaskStatus: jest.fn(),
   isRunwayConfigured: jest.fn(),
-  // Real constants, not mocks — the route's zod schema is built from these
-  // at module load, so stubbing them out would break every parse.
-  MIN_DURATION_SECONDS: 2,
-  MAX_DURATION_SECONDS: 10,
+  // Real constants, not mocks — the route's zod schema + pre-flight are
+  // built from these at module load, so stubbing them out would break
+  // every parse. Mirrors the real MODEL_CAPABILITIES for the exposed models.
   RUNWAY_ASPECT_RATIOS: ['16:9', '9:16', '1:1'],
+  MODEL_CAPABILITIES: {
+    'gen4.5': { ratioByAspect: { '16:9': '1280:720', '9:16': '720:1280', '1:1': '960:960' }, durations: [5, 10] },
+    seedance2: { ratioByAspect: { '16:9': '1280:720', '9:16': '720:1280', '1:1': '960:960' }, durations: [5, 10] },
+  },
 }))
 jest.mock('@/lib/quota', () => ({
   checkGenerationQuota: jest.fn(),
@@ -110,22 +113,22 @@ describe('POST /api/videos/runway/generate', () => {
     mockedCreate.mockResolvedValue('task_123')
     video.create.mockResolvedValue({ id: 'new-video-1' } as any)
 
-    const response = await POST(request({ promptText: 'a mountain sunrise', model: 'veo3.1', duration: 8 }))
+    const response = await POST(request({ promptText: 'a mountain sunrise', model: 'seedance2', duration: 10 }))
     const body = await response.json()
 
     expect(response.status).toBe(200)
     expect(body.videoId).toBe('new-video-1')
     expect(mockedCreate).toHaveBeenCalledWith({
       promptText: 'a mountain sunrise',
-      model: 'veo3.1',
+      model: 'seedance2',
       aspectRatio: '16:9',
-      duration: 8,
+      duration: 10,
       seed: undefined,
     })
     expect(video.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ userId: 'user-1', status: 'QUEUED' }),
     }))
-    expect(mockedSettle).toHaveBeenCalledWith('user-1', 'new-video-1', 8, expect.anything())
+    expect(mockedSettle).toHaveBeenCalledWith('user-1', 'new-video-1', 10, expect.anything())
 
     expect(mockedPoll).toHaveBeenCalledWith(expect.objectContaining({
       videoId: 'new-video-1',
@@ -134,7 +137,7 @@ describe('POST /api/videos/runway/generate', () => {
       prompt: 'a mountain sunrise',
     }))
     const pollArgs = mockedPoll.mock.calls[0][0]
-    expect(pollArgs.successCost()).toEqual({ runwaySeconds: 8 })
+    expect(pollArgs.successCost()).toEqual({ runwaySeconds: 10 })
 
     // checkStatus just delegates to getRunwayTaskStatus(taskId) — Runway's
     // own status normalization (see tests/lib/runway-provider.test.ts) means
@@ -178,19 +181,25 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     expect(response.status).toBe(503)
   })
 
-  it('returns the curated model list, credit cost, and bounds', async () => {
+  it('returns only the verified models, each with its own durations', async () => {
     const response = await GET()
     const body = await response.json()
     expect(response.status).toBe(200)
-    expect(body.models.map((m: { id: string }) => m.id)).toEqual([
-      'gen4.5', 'gen3a_turbo', 'veo3.1', 'seedance2', 'kling3.0_pro',
-    ])
+    // Only the two live-verified models are exposed — no gen4_turbo/gen3a_turbo
+    // (unavailable) or veo3.1/kling3.0_pro (unverified param dimensions).
+    expect(body.models.map((m: { id: string }) => m.id)).toEqual(['gen4.5', 'seedance2'])
     expect(body.models.every((m: { label?: string }) => typeof m.label === 'string' && m.label.length > 0)).toBe(true)
+    expect(body.models.every((m: { durations?: number[] }) => Array.isArray(m.durations) && m.durations.length > 0)).toBe(true)
     expect(body.creditCost).toBe(2)
-    expect(body.minDuration).toBe(2)
-    expect(body.maxDuration).toBe(10)
+    expect(body.durations).toEqual([5, 10])
     expect(body.aspectRatios).toEqual(['16:9', '9:16', '1:1'])
     // The learning system's router ranking rides along for the picker.
     expect(body.recommendations).toEqual([])
+  })
+
+  it('rejects a duration the selected model does not support', async () => {
+    const response = await POST(request({ promptText: 'a mountain sunrise', model: 'gen4.5', duration: 7 }))
+    expect(response.status).toBe(400)
+    expect(mockedCreate).not.toHaveBeenCalled()
   })
 })

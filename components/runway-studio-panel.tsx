@@ -13,13 +13,14 @@ import { pollAiJob } from "@/lib/ai-job-poll-client"
 interface RunwayModel {
   id: string
   label: string
+  /** The exact durations (seconds) this model accepts — the picker constrains to these. */
+  durations: number[]
 }
 
 interface RunwayAvailability {
   models: RunwayModel[]
   creditCost: number
-  minDuration: number
-  maxDuration: number
+  durations: number[]
   aspectRatios: string[]
   /** Evidence-based ranking from the learning system's provider router, best first. */
   recommendations?: { model: string; reason: string; evidenceCount: number }[]
@@ -65,7 +66,10 @@ export function RunwayStudioPanel() {
       // model this panel actually exposes; first curated model otherwise.
       const recommended = data.recommendations?.[0]?.model
       const models: RunwayModel[] = data.models ?? []
-      setModel(models.some((m: RunwayModel) => m.id === recommended) ? recommended : models[0]?.id ?? "")
+      const chosen = models.some((m: RunwayModel) => m.id === recommended) ? recommended : models[0]?.id ?? ""
+      setModel(chosen)
+      const chosenDurations = models.find((m) => m.id === chosen)?.durations ?? []
+      if (chosenDurations.length && !chosenDurations.includes(duration)) setDuration(chosenDurations[0])
       setState("ready")
     } catch (error) {
       setState("error")
@@ -143,10 +147,10 @@ export function RunwayStudioPanel() {
     )
   }
 
-  const durations = Array.from(
-    { length: availability.maxDuration - availability.minDuration + 1 },
-    (_, i) => availability.minDuration + i,
-  )
+  // Durations the SELECTED model accepts — not a global range. Keeps the
+  // dropdown from ever offering a value the API would reject.
+  const selectedModel = availability.models.find((m) => m.id === model)
+  const durations = selectedModel?.durations ?? availability.durations
 
   return (
     <Card>
@@ -174,7 +178,13 @@ export function RunwayStudioPanel() {
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={model}
-            onChange={(e) => setModel(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value
+              setModel(next)
+              // Snap duration to one the new model actually supports.
+              const nextDurations = availability.models.find((m) => m.id === next)?.durations ?? []
+              if (nextDurations.length && !nextDurations.includes(duration)) setDuration(nextDurations[0])
+            }}
             className="rounded-md border bg-background p-2 text-sm"
             aria-label="AI model"
           >

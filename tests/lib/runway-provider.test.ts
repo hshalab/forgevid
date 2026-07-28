@@ -62,18 +62,38 @@ describe('buildTextToVideoPayload', () => {
     expect(withSeed.seed).toBe(42)
   })
 
-  it('accepts any model string — which ones to expose is the caller\'s choice, not this module\'s', () => {
+  it('accepts an unknown model string (generic bounds), and maps its ratio with the standard map', () => {
     expect(() => buildTextToVideoPayload({
       promptText: 'p', model: 'some-future-model', aspectRatio: '16:9', duration: 5,
     })).not.toThrow()
   })
 
-  it('rejects a duration outside [2, 10] even if a caller skips the route\'s own zod check', () => {
+  it('uses HD ratios for kling — 1280:720 would be rejected by that endpoint', () => {
+    expect(buildTextToVideoPayload({
+      promptText: 'p', model: 'kling3.0_pro', aspectRatio: '16:9', duration: 5,
+    }).ratio).toBe('1920:1080')
+  })
+
+  it("enforces each model's OWN allowed durations, not a shared range", () => {
+    // veo3.1 accepts only 4 or 8 — 5 (fine for gen4.5) must be rejected for veo.
     expect(() => buildTextToVideoPayload({
-      promptText: 'p', model: 'gen4.5', aspectRatio: '16:9', duration: 1,
+      promptText: 'p', model: 'veo3.1', aspectRatio: '16:9', duration: 5,
+    })).toThrow(/4, 8 seconds/)
+    expect(() => buildTextToVideoPayload({
+      promptText: 'p', model: 'veo3.1', aspectRatio: '16:9', duration: 8,
+    })).not.toThrow()
+    // gen4.5 accepts 5 and 10 but not 7.
+    expect(() => buildTextToVideoPayload({
+      promptText: 'p', model: 'gen4.5', aspectRatio: '16:9', duration: 7,
+    })).toThrow(/5, 10 seconds/)
+  })
+
+  it('falls back to the generic [2,10] bound for a model with no declared capabilities', () => {
+    expect(() => buildTextToVideoPayload({
+      promptText: 'p', model: 'some-future-model', aspectRatio: '16:9', duration: 1,
     })).toThrow(/between 2 and 10/)
     expect(() => buildTextToVideoPayload({
-      promptText: 'p', model: 'gen4.5', aspectRatio: '16:9', duration: 3600,
+      promptText: 'p', model: 'some-future-model', aspectRatio: '16:9', duration: 3600,
     })).toThrow(/between 2 and 10/)
   })
 })

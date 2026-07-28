@@ -11,8 +11,7 @@ import {
   createTextToVideo,
   getRunwayTaskStatus,
   isRunwayConfigured,
-  MAX_DURATION_SECONDS,
-  MIN_DURATION_SECONDS,
+  MODEL_CAPABILITIES,
   RUNWAY_ASPECT_RATIOS,
 } from '@/lib/runway-provider';
 import { RATES } from '@/lib/cost-ledger';
@@ -35,40 +34,48 @@ import { recommendFrontierModels } from '@/lib/provider-router';
  */
 
 /**
- * A deliberately curated subset of the ~15 video-capable models this
- * account has access to (one representative per frontier provider) — a
- * ForgeVid product decision (which choices are worth surfacing), not a fact
- * about Runway's API, so it lives here rather than in lib/runway-provider.ts.
+ * The models ForgeVid actually EXPOSES — a product decision (which choices
+ * to surface), separate from lib/runway-provider.ts's MODEL_CAPABILITIES
+ * (the API facts about every model).
+ *
+ * ONLY models verified end-to-end on THIS account (real task → SUCCEEDED →
+ * video URL, 2026-07-28) are listed. Two more are live on the account but
+ * held back until their remaining unknown is verified: veo3.1 (durations
+ * 4/8 confirmed, its ratio not yet) and kling3.0_pro (HD ratios confirmed,
+ * its durations not yet). Their constraints already live in
+ * MODEL_CAPABILITIES, so adding them here is a one-line change once a paid
+ * verification run confirms the last dimension — never exposing a
+ * combination the API would reject.
  */
-// Every entry here is confirmed valid on the /v1/text_to_video endpoint by
-// the API's own validation response (2026-07-28) — NOT just present in the
-// org's model list. gen4_turbo is in the org list but is NOT a text_to_video
-// model (the endpoint rejects it); gen3a_turbo is the accepted Runway turbo
-// option. Verified end-to-end with a real gen4.5 generation.
-const RUNWAY_VIDEO_MODELS = [
-  'gen4.5',
-  'gen3a_turbo',
-  'veo3.1',
-  'seedance2',
-  'kling3.0_pro',
-] as const;
+const RUNWAY_VIDEO_MODELS = ['gen4.5', 'seedance2'] as const;
 
 /** User-facing labels for the picker the GET handler serves. */
 const MODEL_LABELS: Record<(typeof RUNWAY_VIDEO_MODELS)[number], string> = {
   'gen4.5': "Runway Gen-4.5 — Runway's flagship",
-  gen3a_turbo: 'Runway Gen-3 Alpha Turbo — faster/cheaper',
-  'veo3.1': 'Google Veo 3.1',
   seedance2: 'ByteDance Seedance 2',
-  'kling3.0_pro': 'Kuaishou Kling 3.0 Pro',
 };
+
+// The durations the exposed models share (both accept exactly 5 and 10).
+// Sourced from MODEL_CAPABILITIES so the schema, the pre-flight, and the
+// provider can never disagree.
+const EXPOSED_DURATIONS = MODEL_CAPABILITIES['gen4.5'].durations;
 
 const bodySchema = z.object({
   promptText: z.string().min(3).max(1000),
   model: z.enum(RUNWAY_VIDEO_MODELS).default('gen4.5'),
   aspectRatio: z.enum(RUNWAY_ASPECT_RATIOS).default('16:9'),
-  /** Seconds — gen4.5's documented range, sourced from (and re-enforced inside) lib/runway-provider.ts. */
-  duration: z.number().int().min(MIN_DURATION_SECONDS).max(MAX_DURATION_SECONDS).default(5),
+  /** Seconds — must be one the selected model accepts (validated against MODEL_CAPABILITIES below). */
+  duration: z.number().int().default(5),
   seed: z.number().int().min(0).max(4294967295).optional(),
+}).superRefine((data, ctx) => {
+  const allowed = MODEL_CAPABILITIES[data.model]?.durations ?? [];
+  if (!allowed.includes(data.duration)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['duration'],
+      message: `Model ${data.model} supports these durations: ${allowed.join(', ')} seconds`,
+    });
+  }
 });
 
 // Worst case ($0.12/s x 10s = $1.20) against a purchased credit's ~$1.16-1.50
@@ -252,10 +259,15 @@ export async function GET() {
   const recommendations = await recommendFrontierModels({ priority: 'balanced' }).catch(() => []);
 
   return NextResponse.json({
-    models: RUNWAY_VIDEO_MODELS.map((id) => ({ id, label: MODEL_LABELS[id] })),
+    // Each model carries its OWN valid durations — the picker constrains the
+    // duration options to whatever the chosen model actually accepts.
+    models: RUNWAY_VIDEO_MODELS.map((id) => ({
+      id,
+      label: MODEL_LABELS[id],
+      durations: MODEL_CAPABILITIES[id].durations,
+    })),
     creditCost: RUNWAY_CREDIT_COST,
-    minDuration: MIN_DURATION_SECONDS,
-    maxDuration: MAX_DURATION_SECONDS,
+    durations: EXPOSED_DURATIONS,
     aspectRatios: RUNWAY_ASPECT_RATIOS,
     recommendations,
   });

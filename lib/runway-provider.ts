@@ -33,12 +33,9 @@ import { withProviderReliability } from './provider-reliability';
 const API_BASE = 'https://api.dev.runwayml.com/v1';
 const API_VERSION = '2024-11-06';
 
-// gen4.5's documented range — the one duration bound this integration can
-// actually verify. Enforced HERE (not just in the route's zod schema) so a
-// future second caller of this module can't slip an uncapped duration
-// through to a real, per-second-billed API. Exported so the route's zod
-// schema and its GET pre-flight derive from the same numbers instead of
-// keeping their own copies.
+// Overall guard rails for any model not in MODEL_CAPS below — enforced HERE
+// (not just in the route's zod schema) so a future caller can't slip an
+// uncapped duration through to a real, per-second-billed API.
 export const MIN_DURATION_SECONDS = 2;
 export const MAX_DURATION_SECONDS = 10;
 
@@ -64,10 +61,42 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
 export const RUNWAY_ASPECT_RATIOS = ['16:9', '9:16', '1:1'] as const;
 export type RunwayAspectRatio = (typeof RUNWAY_ASPECT_RATIOS)[number];
 
-const RATIO_BY_ASPECT: Record<RunwayAspectRatio, string> = {
+// Standard-def ratios (gen4.5, seedance2) vs HD ratios (kling). These are
+// NOT interchangeable per model — kling's endpoint rejects 1280:720 and
+// demands 1920:1080; a single shared map is what made the first attempt
+// error. Discovered live from the API's own 400 validation responses
+// (2026-07-28), not guessed.
+const STANDARD_RATIOS: Record<RunwayAspectRatio, string> = {
   '16:9': '1280:720',
   '9:16': '720:1280',
   '1:1': '960:960',
+};
+const HD_RATIOS: Record<RunwayAspectRatio, string> = {
+  '16:9': '1920:1080',
+  '9:16': '1080:1920',
+  '1:1': '1440:1440',
+};
+
+export interface ModelCapabilities {
+  ratioByAspect: Record<RunwayAspectRatio, string>;
+  /** The exact durations (seconds) this model's endpoint accepts. */
+  durations: number[];
+}
+
+/**
+ * Per-model API facts — each Runway-hosted model has its OWN valid ratios
+ * and durations, learned from the endpoint's own validation responses:
+ *  - gen4.5, seedance2: verified end-to-end (task → SUCCEEDED → video URL).
+ *  - veo3.1: durations MUST be 4 or 8 (API: "expected 4"/"expected 8").
+ *  - kling3.0_pro: ratio MUST be HD (API listed 1920:1080/1080:1920/1440:1440).
+ * Which of these the product EXPOSES is the route's decision — only the
+ * verified two are surfaced there today.
+ */
+export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
+  'gen4.5': { ratioByAspect: STANDARD_RATIOS, durations: [5, 10] },
+  seedance2: { ratioByAspect: STANDARD_RATIOS, durations: [5, 10] },
+  'veo3.1': { ratioByAspect: STANDARD_RATIOS, durations: [4, 8] },
+  'kling3.0_pro': { ratioByAspect: HD_RATIOS, durations: [5, 10] },
 };
 
 export interface RunwayGenerationArgs {
@@ -75,20 +104,26 @@ export interface RunwayGenerationArgs {
   /** Any Runway model string — which ones ForgeVid exposes is the caller's choice, not this module's. */
   model: string;
   aspectRatio: RunwayAspectRatio;
-  /** Seconds, clamped to [2, 10] — see MIN/MAX_DURATION_SECONDS above. */
+  /** Seconds — validated against the model's own allowed durations (MODEL_CAPABILITIES). */
   duration: number;
   seed?: number;
 }
 
 /** The exact request body Runway's text_to_video endpoint expects. Pure and pinned by tests. */
 export function buildTextToVideoPayload(args: RunwayGenerationArgs): Record<string, unknown> {
-  if (args.duration < MIN_DURATION_SECONDS || args.duration > MAX_DURATION_SECONDS) {
+  const caps = MODEL_CAPABILITIES[args.model];
+  if (caps) {
+    if (!caps.durations.includes(args.duration)) {
+      throw new Error(`Model ${args.model} supports these durations: ${caps.durations.join(', ')} seconds`);
+    }
+  } else if (args.duration < MIN_DURATION_SECONDS || args.duration > MAX_DURATION_SECONDS) {
     throw new Error(`Runway duration must be between ${MIN_DURATION_SECONDS} and ${MAX_DURATION_SECONDS} seconds`);
   }
+  const ratioByAspect = caps?.ratioByAspect ?? STANDARD_RATIOS;
   return {
     model: args.model,
     promptText: args.promptText,
-    ratio: RATIO_BY_ASPECT[args.aspectRatio],
+    ratio: ratioByAspect[args.aspectRatio],
     duration: args.duration,
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
   };
