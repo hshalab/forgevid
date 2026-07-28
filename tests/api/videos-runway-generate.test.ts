@@ -183,7 +183,7 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     const body = await response.json()
     expect(response.status).toBe(200)
     expect(body.models.map((m: { id: string }) => m.id)).toEqual([
-      'gen4.5', 'gen4_turbo', 'veo3.1', 'seedance2', 'kling3.0_pro',
+      'gen4.5', 'gen3a_turbo', 'veo3.1', 'seedance2', 'kling3.0_pro',
     ])
     expect(body.models.every((m: { label?: string }) => typeof m.label === 'string' && m.label.length > 0)).toBe(true)
     expect(body.creditCost).toBe(2)

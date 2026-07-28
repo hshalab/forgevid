@@ -40,9 +40,14 @@ import { recommendFrontierModels } from '@/lib/provider-router';
  * ForgeVid product decision (which choices are worth surfacing), not a fact
  * about Runway's API, so it lives here rather than in lib/runway-provider.ts.
  */
+// Every entry here is confirmed valid on the /v1/text_to_video endpoint by
+// the API's own validation response (2026-07-28) — NOT just present in the
+// org's model list. gen4_turbo is in the org list but is NOT a text_to_video
+// model (the endpoint rejects it); gen3a_turbo is the accepted Runway turbo
+// option. Verified end-to-end with a real gen4.5 generation.
 const RUNWAY_VIDEO_MODELS = [
   'gen4.5',
-  'gen4_turbo',
+  'gen3a_turbo',
   'veo3.1',
   'seedance2',
   'kling3.0_pro',
@@ -51,7 +56,7 @@ const RUNWAY_VIDEO_MODELS = [
 /** User-facing labels for the picker the GET handler serves. */
 const MODEL_LABELS: Record<(typeof RUNWAY_VIDEO_MODELS)[number], string> = {
   'gen4.5': "Runway Gen-4.5 — Runway's flagship",
-  gen4_turbo: 'Runway Gen-4 Turbo — faster',
+  gen3a_turbo: 'Runway Gen-3 Alpha Turbo — faster/cheaper',
   'veo3.1': 'Google Veo 3.1',
   seedance2: 'ByteDance Seedance 2',
   'kling3.0_pro': 'Kuaishou Kling 3.0 Pro',

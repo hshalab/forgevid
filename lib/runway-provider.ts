@@ -1,11 +1,15 @@
 /**
  * Frontier AI video generation via Runway's API (v1) — one integration that
  * reaches Runway's own Gen models AND the third-party frontier models Runway
- * hosts behind the same account/key. Confirmed LIVE on this account via
- * `GET /v1/organization` (not guessed): gen4.5/gen4_turbo (Runway), veo3/
- * veo3.1 (Google), seedance2 (ByteDance), kling3.0/klingO3 (Kuaishou) are
- * all available models. This generates NEW video from a text prompt, unlike
- * the existing stock-footage assembler (lib/video-generator.ts) — real,
+ * hosts behind the same account/key. Confirmed LIVE on this account (not
+ * guessed): gen4.5/gen3a_turbo (Runway), veo3/veo3.1 (Google), seedance2
+ * (ByteDance), kling3.0/klingO3 (Kuaishou). NOTE: the org's model LIST is
+ * broader than what /v1/text_to_video accepts — gen4_turbo appears in the
+ * org list but is rejected by text_to_video; the curated list in the route
+ * uses only endpoint-validated models. Verified end-to-end 2026-07-28 with
+ * a real gen4.5 generation (task created, polled to SUCCEEDED, video URL
+ * returned, 60 credits spent). This generates NEW video from a text prompt,
+ * unlike the stock-footage assembler (lib/video-generator.ts) — real,
  * opt-in, billed per second, never a replacement for the free path.
  *
  * Which specific models ForgeVid chooses to expose in its own UI is a

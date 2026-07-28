@@ -3,7 +3,7 @@ import { productImprovementOptOuts } from './learning-consent';
 
 export const FRONTIER_MODELS = [
   { provider: 'runway', model: 'gen4.5', qualityPrior: 92, costPrior: 0.12, latencyPrior: 90 },
-  { provider: 'runway', model: 'gen4_turbo', qualityPrior: 82, costPrior: 0.05, latencyPrior: 45 },
+  { provider: 'runway', model: 'gen3a_turbo', qualityPrior: 78, costPrior: 0.05, latencyPrior: 45 },
   { provider: 'runway', model: 'veo3.1', qualityPrior: 94, costPrior: 0.14, latencyPrior: 110 },
   { provider: 'runway', model: 'seedance2', qualityPrior: 87, costPrior: 0.10, latencyPrior: 75 },
   { provider: 'runway', model: 'kling3.0_pro', qualityPrior: 90, costPrior: 0.12, latencyPrior: 100 },
