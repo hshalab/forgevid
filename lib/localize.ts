@@ -19,6 +19,24 @@ import { llm, llmModel, hasLlmKey } from './ai/llm';
 import { spokenLine } from './video-generator';
 import type { NarrationLanguage, PlannedScene, ResolvedScene } from './video-generator';
 import { NARRATION_LANGUAGE_NAMES } from './video-generator';
+import { approvedTranslation, getLocalizationProfile } from './localization-memory';
+
+export interface LocalizeOptions {
+  /**
+   * When set, the user's corporate localization layer applies: previously
+   * human-approved translations (translation memory) are reused verbatim
+   * instead of re-asking the LLM, and the profile's tone/formality/glossary
+   * steer whatever still needs translating. Omitted (e.g. in tests or
+   * system contexts) → plain stateless translation, exactly as before.
+   */
+  userId?: string;
+  /**
+   * The language the SOURCE lines are in — the translation-memory key's
+   * first half. Defaults to 'en'; callers localizing an already-localized
+   * video should pass its actual language or memory lookups will miss.
+   */
+  sourceLanguage?: string;
+}
 
 function numbersIn(text: string): string[] {
   return (text.match(/\d[\d,.]*/g) ?? []).map((n) => n.replace(/[, ]/g, ''));
@@ -41,12 +59,48 @@ function preservesNumbers(original: string, translated: string): boolean {
 export async function translateNarrationLines(
   lines: string[],
   targetLanguage: NarrationLanguage,
+  options: LocalizeOptions = {},
 ): Promise<string[]> {
   if (lines.length === 0) return [];
-  if (!hasLlmKey()) return lines;
+
+  // Corporate localization memory: lines a human already approved for this
+  // user+language pair are reused verbatim — no LLM call, no drift from the
+  // approved wording. Best-effort: a memory lookup failure just means a
+  // normal translation.
+  const fromMemory = new Map<number, string>();
+  let profileDirectives = '';
+  if (options.userId) {
+    try {
+      const sourceLanguage = options.sourceLanguage ?? 'en';
+      const [profile, hits] = await Promise.all([
+        getLocalizationProfile(options.userId),
+        Promise.all(lines.map((line) => approvedTranslation(options.userId!, sourceLanguage, targetLanguage, line))),
+      ]);
+      hits.forEach((hit, i) => {
+        if (hit) fromMemory.set(i, hit);
+      });
+      const glossaryPairs = Object.entries((profile.glossary as Record<string, string>) ?? {})
+        .filter(([term, rendering]) => typeof term === 'string' && typeof rendering === 'string')
+        .slice(0, 100);
+      profileDirectives =
+        ` Use a ${profile.tone} tone with ${profile.formality} formality.` +
+        (glossaryPairs.length
+          ? ` Always render these terms exactly as specified: ${glossaryPairs
+              .map(([term, rendering]) => `"${term}" → "${rendering}"`)
+              .join(', ')}.`
+          : '');
+    } catch (error) {
+      console.warn('[Localize] localization profile/memory unavailable (translating without it):', error);
+    }
+  }
+  if (fromMemory.size === lines.length) {
+    return lines.map((_, i) => fromMemory.get(i)!);
+  }
+  if (!hasLlmKey()) return lines.map((line, i) => fromMemory.get(i) ?? line);
 
   const languageName = NARRATION_LANGUAGE_NAMES[targetLanguage];
-  const numbered = lines.map((line, i) => `${i + 1}. ${line}`).join('\n');
+  const pending = lines.map((line, i) => ({ line, i })).filter(({ i }) => !fromMemory.has(i));
+  const numbered = pending.map(({ line }, n) => `${n + 1}. ${line}`).join('\n');
 
   try {
     const response = await llm.chat.completions.create({
@@ -59,7 +113,8 @@ export async function translateNarrationLines(
             `translated lines, one per line, in the SAME numbered order — no extra commentary. ` +
             `Keep every number, price, and percentage EXACTLY as written (do not localize digit ` +
             `formats or convert currency). Never translate the brand names ForgeVid, RingYield, ` +
-            `or NeuroHires — keep them exactly as written.`,
+            `or NeuroHires — keep them exactly as written.` +
+            profileDirectives,
         },
         { role: 'user', content: numbered },
       ],
@@ -73,19 +128,24 @@ export async function translateNarrationLines(
       .map((line) => line.replace(/^\s*\d+[.)]\s*/, '').trim())
       .filter(Boolean);
 
-    if (translated.length !== lines.length) {
+    if (translated.length !== pending.length) {
       console.error(
-        `[Localize] translation returned ${translated.length} lines for ${lines.length} input lines — falling back to originals`,
+        `[Localize] translation returned ${translated.length} lines for ${pending.length} input lines — falling back to originals`,
       );
-      return lines;
+      return lines.map((line, i) => fromMemory.get(i) ?? line);
     }
 
-    return lines.map((original, i) =>
-      preservesNumbers(original, translated[i]) ? translated[i] : original,
-    );
+    const result = [...lines];
+    pending.forEach(({ line, i }, n) => {
+      result[i] = preservesNumbers(line, translated[n]) ? translated[n] : line;
+    });
+    fromMemory.forEach((approved, i) => {
+      result[i] = approved;
+    });
+    return result;
   } catch (error) {
     console.error('[Localize] translation failed (falling back to original lines):', error);
-    return lines;
+    return lines.map((line, i) => fromMemory.get(i) ?? line);
   }
 }
 
@@ -98,9 +158,10 @@ export async function translateNarrationLines(
 export async function localizedPresetScenes(
   scenes: ResolvedScene[],
   targetLanguage: NarrationLanguage,
+  options: LocalizeOptions = {},
 ): Promise<PlannedScene[]> {
   const originalLines = scenes.map((scene) => spokenLine(scene));
-  const translatedLines = await translateNarrationLines(originalLines, targetLanguage);
+  const translatedLines = await translateNarrationLines(originalLines, targetLanguage, options);
 
   return scenes.map((scene, i) => ({
     id: scene.id,

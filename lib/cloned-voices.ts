@@ -29,7 +29,7 @@ export function isVoiceCloningConfigured(): boolean {
 
 export async function listClonedVoices(userId: string): Promise<ClonedVoiceInfo[]> {
   const rows = await prisma.clonedVoice.findMany({
-    where: { userId },
+    where: { userId, revokedAt: null },
     orderBy: { createdAt: 'desc' },
   });
   return rows.map((r) => ({
@@ -53,7 +53,7 @@ export async function resolveVoiceIdForUser(
 
   try {
     const owned = await prisma.clonedVoice.findFirst({
-      where: { userId, providerVoiceId: requested },
+      where: { userId, providerVoiceId: requested, revokedAt: null },
       select: { id: true },
     });
     if (owned) return requested;
@@ -73,6 +73,10 @@ export async function cloneVoiceFromSample(args: {
   sample: Buffer;
   sampleFilename: string;
   sampleMimeType: string;
+  consentVersion: string;
+  subjectName?: string | null;
+  authorizationBasis: 'self' | 'authorized';
+  trainingAllowed: boolean;
 }): Promise<ClonedVoiceInfo> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
@@ -107,9 +111,47 @@ export async function cloneVoiceFromSample(args: {
     where: {
       userId_providerVoiceId: { userId: args.userId, providerVoiceId: data.voice_id },
     },
-    create: { userId: args.userId, providerVoiceId: data.voice_id, name: args.name },
-    update: { name: args.name },
+    create: {
+      userId: args.userId,
+      providerVoiceId: data.voice_id,
+      name: args.name,
+      consentVersion: args.consentVersion,
+      consentedAt: new Date(),
+      subjectName: args.subjectName ?? null,
+      authorizationBasis: args.authorizationBasis,
+      trainingAllowed: args.trainingAllowed,
+    },
+    update: {
+      name: args.name,
+      consentVersion: args.consentVersion,
+      consentedAt: new Date(),
+      subjectName: args.subjectName ?? null,
+      authorizationBasis: args.authorizationBasis,
+      trainingAllowed: args.trainingAllowed,
+      revokedAt: null,
+      providerDeletedAt: null,
+    },
   });
 
   return { id: row.id, providerVoiceId: row.providerVoiceId, name: row.name, cloned: true };
+}
+
+export async function revokeClonedVoice(userId: string, id: string): Promise<void> {
+  const row = await prisma.clonedVoice.findFirst({ where: { id, userId, revokedAt: null } });
+  if (!row) throw new Error('Voice not found');
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw new Error('Voice deletion is unavailable until ELEVENLABS_API_KEY is configured');
+  const response = await withProviderReliability('elevenlabs', () =>
+    fetch(`https://api.elevenlabs.io/v1/voices/${encodeURIComponent(row.providerVoiceId)}`, {
+      method: 'DELETE',
+      headers: { 'xi-api-key': apiKey },
+    }),
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Provider voice deletion failed (${response.status})`);
+  }
+  await prisma.clonedVoice.update({
+    where: { id: row.id },
+    data: { revokedAt: new Date(), providerDeletedAt: new Date(), trainingAllowed: false },
+  });
 }

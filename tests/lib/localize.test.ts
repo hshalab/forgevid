@@ -3,13 +3,22 @@ jest.mock('@/lib/ai/llm', () => ({
   llmModel: jest.fn(() => 'test-model'),
   hasLlmKey: jest.fn(() => true),
 }))
+jest.mock('@/lib/localization-memory', () => ({
+  approvedTranslation: jest.fn().mockResolvedValue(null),
+  getLocalizationProfile: jest.fn().mockResolvedValue({
+    tone: 'professional', formality: 'neutral', glossary: {}, pronunciations: [],
+  }),
+}))
 
 import { llm, hasLlmKey } from '@/lib/ai/llm'
+import { approvedTranslation, getLocalizationProfile } from '@/lib/localization-memory'
 import { translateNarrationLines, localizedPresetScenes } from '@/lib/localize'
 import type { ResolvedScene } from '@/lib/video-generator'
 
 const mockCreate = llm.chat.completions.create as jest.Mock
 const mockHasLlmKey = hasLlmKey as jest.Mock
+const mockApproved = approvedTranslation as jest.Mock
+const mockProfile = getLocalizationProfile as jest.Mock
 
 function completion(content: string) {
   return { choices: [{ message: { content } }] }
@@ -77,6 +86,44 @@ describe('translateNarrationLines', () => {
     mockCreate.mockRejectedValue(new Error('rate limited'))
     const result = await translateNarrationLines(['Hello world'], 'es')
     expect(result).toEqual(['Hello world'])
+  })
+
+  it('reuses human-approved translations verbatim and skips the LLM entirely on a full hit', async () => {
+    mockApproved.mockResolvedValueOnce('Hola mundo aprobado')
+    const result = await translateNarrationLines(['Hello world'], 'es', { userId: 'user-1' })
+    expect(result).toEqual(['Hola mundo aprobado'])
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('translates only the memory misses, splicing approved lines back in position', async () => {
+    mockApproved
+      .mockResolvedValueOnce('Primera aprobada')
+      .mockResolvedValueOnce(null)
+    mockCreate.mockResolvedValue(completion('1. Segunda traducida'))
+    const result = await translateNarrationLines(['First line', 'Second line'], 'es', { userId: 'user-1' })
+    expect(result).toEqual(['Primera aprobada', 'Segunda traducida'])
+    // Only the miss went to the model.
+    expect(mockCreate.mock.calls[0][0].messages[1].content).toBe('1. Second line')
+  })
+
+  it("steers the LLM with the profile's tone, formality, and glossary", async () => {
+    mockProfile.mockResolvedValueOnce({
+      tone: 'luxury', formality: 'formal',
+      glossary: { 'Machado Auto Sales': 'Machado Auto Sales' }, pronunciations: [],
+    })
+    mockCreate.mockResolvedValue(completion('1. Hola'))
+    await translateNarrationLines(['Hello'], 'es', { userId: 'user-1' })
+    const system = mockCreate.mock.calls[0][0].messages[0].content
+    expect(system).toContain('luxury tone')
+    expect(system).toContain('formal formality')
+    expect(system).toContain('"Machado Auto Sales" → "Machado Auto Sales"')
+  })
+
+  it('translates statelessly when no userId is given — memory and profile untouched', async () => {
+    mockCreate.mockResolvedValue(completion('1. Hola mundo'))
+    await translateNarrationLines(['Hello world'], 'es')
+    expect(mockApproved).not.toHaveBeenCalled()
+    expect(mockProfile).not.toHaveBeenCalled()
   })
 })
 

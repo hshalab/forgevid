@@ -147,6 +147,10 @@ function VoiceToVideoPanel() {
           toast.success('Video generated successfully!');
           return;
         }
+        if (job.status === 'REVIEW_REQUIRED' || job.requiresReview) {
+          toast.info('Render finished but was held for your review — open the AI Studio to accept or reject it.');
+          return;
+        }
         if (job.status === 'FAILED') {
           throw new Error(job.error || 'Video generation failed');
         }

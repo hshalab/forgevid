@@ -198,6 +198,11 @@ export function SceneEditorPanel({ videoId, onRerendered }: SceneEditorPanelProp
           onRerendered?.(`${job.videoUrl.split("?")[0]}?t=${Date.now()}`)
           return
         }
+        if (job.status === "REVIEW_REQUIRED" || job.requiresReview) {
+          setProgress(100)
+          toast.info("Re-render finished but was held for your review — accept or reject it in the AI Studio.")
+          return
+        }
         if (job.status === "FAILED") throw new Error(job.error || "Re-render failed")
       }
       throw new Error("Re-render timed out")

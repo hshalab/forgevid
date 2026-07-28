@@ -86,9 +86,9 @@ export function AvatarStudioPanel() {
         errorFallback: "Avatar render failed",
         timeoutMessage: "Avatar render timed out",
       })
-      setVideoUrl(result.videoUrl)
+      setVideoUrl(result.videoUrl ?? result.reviewPreviewUrl)
       setProgress(100)
-      toast.success("Avatar video ready!")
+      toast.success(result.requiresReview ? "Video ready — held for your review in the AI Studio." : "Avatar video ready!")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Avatar render failed")
     } finally {

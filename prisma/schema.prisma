@@ -3,21 +3,22 @@ model SupportTicket {
   id          String   @id @default(cuid())
   subject     String
   description String
-  priority    String   // e.g. "low", "medium", "high"
-  category    String   // e.g. "general", "billing", etc.
+  priority    String // e.g. "low", "medium", "high"
+  category    String // e.g. "general", "billing", etc.
   status      String   @default("open") // "open", "closed", "pending"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relationships
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
-  @@map("support_tickets")
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@map("support_tickets")
 }
+
 // ForgeVid Production Database Schema (PostgreSQL)
 generator client {
   provider = "prisma-client-js"
@@ -30,117 +31,122 @@ datasource db {
 
 // User Management
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  name           String?
-  image          String?
-  emailVerified  DateTime?
-  password       String?
-  role           UserRole  @default(USER)
-  status         UserStatus @default(ACTIVE)
-  mfaEnabled     Boolean   @default(false)
-  mfaSecret      String?
-  lastLogin      DateTime?
-  lastLoginAt    DateTime?
+  id               String     @id @default(cuid())
+  email            String     @unique
+  name             String?
+  image            String?
+  emailVerified    DateTime?
+  password         String?
+  role             UserRole   @default(USER)
+  status           UserStatus @default(ACTIVE)
+  mfaEnabled       Boolean    @default(false)
+  mfaSecret        String?
+  lastLogin        DateTime?
+  lastLoginAt      DateTime?
   // Password reset: SHA-256 hash of the emailed token (never the raw token) + expiry.
   resetTokenHash   String?
   resetTokenExpiry DateTime?
-  metadata       String?   // JSON string for additional user data
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  metadata         String? // JSON string for additional user data
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   // Subscription information
-  subscription   Json?     // Stripe subscription data
+  subscription Json? // Stripe subscription data
 
   // Organization relationship
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
-
   // User relationships
-  videos         Video[]
-  collaborations CollaborationRoom[]
+  videos                   Video[]
+  collaborations           CollaborationRoom[]
   collaborationMemberships CollaborationMember[]
-  usageRecords   UsageRecord[]
-  subscriptions  Subscription[]
-  payments       Payment[]
-  analytics      UserAnalytics[]
-  notifications  Notification[]
-  sessions       Session[]
-  apiKeys        ApiKey[]
-  videoEdits     VideoEdit[]
-  aiGenerations  AIGeneration[]
-  collaborationMessages CollaborationMessage[]
-  collaborationEdits CollaborationEdit[]
-  templatesCreated Template[] @relation("TemplateCreatedBy")
-  templateRatings  TemplateRating[] @relation("TemplateRatingUser")
-  templateFavorites TemplateFavorite[] @relation("TemplateFavoriteUser")
-  templateModerations TemplateModeration[] @relation("TemplateModerationUser")
-  mediaAssetsUploaded MediaAsset[] @relation("MediaAssetUploadedBy")
-  auditLogs      AuditLog[]
-  supportTickets SupportTicket[]
-  betaAccessEntriesCreated BetaAccessEntry[] @relation("BetaAccessCreatedBy")
-  brandKit       BrandKit?
-  clonedVoices   ClonedVoice[]
-  creditLedgerEntries CreditLedger[]
+  usageRecords             UsageRecord[]
+  subscriptions            Subscription[]
+  payments                 Payment[]
+  analytics                UserAnalytics[]
+  notifications            Notification[]
+  sessions                 Session[]
+  apiKeys                  ApiKey[]
+  videoEdits               VideoEdit[]
+  aiGenerations            AIGeneration[]
+  collaborationMessages    CollaborationMessage[]
+  collaborationEdits       CollaborationEdit[]
+  templatesCreated         Template[]               @relation("TemplateCreatedBy")
+  templateRatings          TemplateRating[]         @relation("TemplateRatingUser")
+  templateFavorites        TemplateFavorite[]       @relation("TemplateFavoriteUser")
+  templateModerations      TemplateModeration[]     @relation("TemplateModerationUser")
+  mediaAssetsUploaded      MediaAsset[]             @relation("MediaAssetUploadedBy")
+  auditLogs                AuditLog[]
+  supportTickets           SupportTicket[]
+  betaAccessEntriesCreated BetaAccessEntry[]        @relation("BetaAccessCreatedBy")
+  brandKit                 BrandKit?
+  clonedVoices             ClonedVoice[]
+  creditLedgerEntries      CreditLedger[]
+  learningConsents         LearningConsent[]
+  generationEvaluations    GenerationEvaluation[]
+  providerObservations     ProviderObservation[]
+  localizationProfile      LocalizationProfile?
+  translationMemory        TranslationMemory[]
+  optimizationAssignments  OptimizationAssignment[]
 
-  @@map("users")
   @@index([email])
   @@index([organizationId])
   @@index([status])
   @@index([createdAt])
+  @@map("users")
 }
 
 model Organization {
-  id          String @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
-  domain      String? @unique
+  domain      String?      @unique
   logo        String?
-  ssoEnabled  Boolean @default(false)
+  ssoEnabled  Boolean      @default(false)
   ssoProvider SSOProvider?
   settings    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   // Organization relationships
-  users       User[]
-  videos      Video[]
-  plans       OrganizationPlan[]
-  invoices    Invoice[]
+  users             User[]
+  videos            Video[]
+  plans             OrganizationPlan[]
+  invoices          Invoice[]
   ssoConfigurations SSOConfiguration[]
 
-  @@map("organizations")
   @@index([name])
   @@index([domain])
+  @@map("organizations")
 }
 
 model SSOConfiguration {
-  id              String      @id @default(cuid())
-  organizationId  String?
-  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  provider        SSOProvider
-  enabled         Boolean     @default(false)
-  metadata        Json?
-  metadataUrl     String?
-  issuer          String?
-  clientId        String?
-  clientSecret    String?
-  tenantId        String?
-  entityId        String?
-  certificate     String?
-  defaultRole     UserRole    @default(USER)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       SSOProvider
+  enabled        Boolean       @default(false)
+  metadata       Json?
+  metadataUrl    String?
+  issuer         String?
+  clientId       String?
+  clientSecret   String?
+  tenantId       String?
+  entityId       String?
+  certificate    String?
+  defaultRole    UserRole      @default(USER)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  @@map("sso_configurations")
   @@unique([provider, organizationId])
   @@index([organizationId])
   @@index([provider])
+  @@map("sso_configurations")
 }
 
 // Organization Plans
 model OrganizationPlan {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   planType       PlanType
@@ -151,19 +157,19 @@ model OrganizationPlan {
   storageLimitGB Int?
   videoLimit     Int?
   priceUSD       Decimal?
-  isActive       Boolean  @default(true)
-  startDate      DateTime @default(now())
+  isActive       Boolean      @default(true)
+  startDate      DateTime     @default(now())
   endDate        DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   // Relationships
-  invoices       Invoice[]
+  invoices Invoice[]
 
-  @@map("organization_plans")
   @@index([organizationId])
   @@index([planType])
   @@index([isActive])
+  @@map("organization_plans")
 }
 
 enum PlanType {
@@ -176,97 +182,99 @@ enum PlanType {
 
 // Video Management
 model Video {
-  id              String      @id @default(cuid())
-  title           String
-  description     String?
-  status          VideoStatus @default(PROCESSING)
-  duration        Int?        // in seconds
-  resolution      String?     // "720p", "1080p", "4k"
-  format          String?     // "mp4", "webm", "mov"
-  fileSize        BigInt?     // in bytes
-  thumbnail       String?
-  url             String?
-  fileUrl         String?     // Cloudinary URL
-  transcript      String?     // AI-generated transcript
-  summary         String?     // AI-generated summary
-  metadata        String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  status      VideoStatus @default(PROCESSING)
+  duration    Int? // in seconds
+  resolution  String? // "720p", "1080p", "4k"
+  format      String? // "mp4", "webm", "mov"
+  fileSize    BigInt? // in bytes
+  thumbnail   String?
+  url         String?
+  fileUrl     String? // Cloudinary URL
+  transcript  String? // AI-generated transcript
+  summary     String? // AI-generated summary
+  metadata    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   // Relationships
-  userId          String
-  organizationId  String?
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization    Organization? @relation(fields: [organizationId], references: [id])
-  edits           VideoEdit[]
-  exports         VideoExport[]
-  analytics       VideoAnalytics[]
+  userId               String
+  organizationId       String?
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization         Organization?          @relation(fields: [organizationId], references: [id])
+  edits                VideoEdit[]
+  exports              VideoExport[]
+  analytics            VideoAnalytics[]
+  evaluations          GenerationEvaluation[]
+  providerObservations ProviderObservation[]
 
-  @@map("videos")
   @@index([userId])
   @@index([organizationId])
   @@index([status])
   @@index([createdAt])
+  @@map("videos")
 }
 
 model VideoEdit {
   id        String   @id @default(cuid())
-  type      String   // "trim", "crop", "filter", "text", "audio"
-  data      String   // JSON string of edit configuration
+  type      String // "trim", "crop", "filter", "text", "audio"
+  data      String // JSON string of edit configuration
   timestamp DateTime @default(now())
 
   // Relationships
-  videoId   String
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
 
-  @@map("video_edits")
   @@index([videoId])
   @@index([userId])
   @@index([timestamp])
+  @@map("video_edits")
 }
 
 model VideoExport {
-  id        String        @id @default(cuid())
-  format    String        // "mp4", "webm", "mov", "gif"
-  quality   String        // "low", "medium", "high", "ultra"
-  status    ExportStatus  @default(PROCESSING)
-  progress  Int           @default(0)
+  id        String       @id @default(cuid())
+  format    String // "mp4", "webm", "mov", "gif"
+  quality   String // "low", "medium", "high", "ultra"
+  status    ExportStatus @default(PROCESSING)
+  progress  Int          @default(0)
   url       String?
-  fileUrl   String?       // CDN URL from Cloudinary
+  fileUrl   String? // CDN URL from Cloudinary
   fileSize  BigInt?
-  createdAt DateTime      @default(now())
+  createdAt DateTime     @default(now())
 
   // Relationships
-  videoId   String
-  video     Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
-  @@map("video_exports")
   @@index([videoId])
   @@index([status])
+  @@map("video_exports")
 }
 
 // AI Features
 model AIGeneration {
-  id          String          @id @default(cuid())
-  type        AIGenerationType
-  prompt      String
-  result      String?
-  status      GenerationStatus @default(PROCESSING)
-  tokensUsed  Int?
-  cost        Decimal?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id         String           @id @default(cuid())
+  type       AIGenerationType
+  prompt     String
+  result     String?
+  status     GenerationStatus @default(PROCESSING)
+  tokensUsed Int?
+  cost       Decimal?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   // Relationships
-  userId      String
-  user        User            @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  @@map("ai_generations")
   @@index([userId])
   @@index([createdAt])
   @@index([type])
+  @@map("ai_generations")
 }
 
 // Collaboration
@@ -281,104 +289,104 @@ model CollaborationRoom {
 
   // Relationships
   createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdBy   User                   @relation(fields: [createdById], references: [id])
   members     CollaborationMember[]
   messages    CollaborationMessage[]
   edits       CollaborationEdit[]
 
-  @@map("collaboration_rooms")
   @@index([createdById])
   @@index([isActive])
+  @@map("collaboration_rooms")
 }
 
 model CollaborationMember {
-  id       String                @id @default(cuid())
-  role     CollaborationRole     @default(VIEWER)
-  joinedAt DateTime              @default(now())
+  id       String            @id @default(cuid())
+  role     CollaborationRole @default(VIEWER)
+  joinedAt DateTime          @default(now())
 
   // Relationships
-  userId   String
-  user     User                  @relation(fields: [userId], references: [id])
-  roomId   String
-  room     CollaborationRoom     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String
+  user   User              @relation(fields: [userId], references: [id])
+  roomId String
+  room   CollaborationRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roomId])
   @@map("collaboration_members")
 }
 
 model CollaborationMessage {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   content   String
   type      MessageType @default(TEXT)
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 
   // Relationships
-  roomId    String
-  room      CollaborationRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User              @relation(fields: [userId], references: [id])
+  roomId String
+  room   CollaborationRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String
+  user   User              @relation(fields: [userId], references: [id])
 
-  @@map("collaboration_messages")
   @@index([roomId])
+  @@map("collaboration_messages")
 }
 
 model CollaborationEdit {
   id        String   @id @default(cuid())
-  type      String   // "video_edit", "comment", "suggestion"
-  data      String   // JSON string of edit data
+  type      String // "video_edit", "comment", "suggestion"
+  data      String // JSON string of edit data
   timestamp DateTime @default(now())
 
   // Relationships
-  roomId    String
-  room      CollaborationRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User              @relation(fields: [userId], references: [id])
+  roomId String
+  room   CollaborationRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String
+  user   User              @relation(fields: [userId], references: [id])
 
-  @@map("collaboration_edits")
   @@index([roomId])
+  @@map("collaboration_edits")
 }
 
 // Templates and Media
 model Template {
-  id          String         @id @default(cuid())
-  name        String
-  description String?
-  category    TemplateCategory
-  duration    Int            // in seconds
-  aspectRatio String         // "16:9", "9:16", "1:1"
-  resolution  String         // "720p", "1080p", "4k"
-  tags        String?
-  thumbnail   String
-  previewUrl  String?
-  templateData String        // JSON string of template configuration
-  usageCount  Int            @default(0)
-  rating      Decimal?
-  isPublic    Boolean        @default(true)
-  moderationStatus String?   @default("approved")  // "pending", "approved", "rejected", "flagged"
-  totalRatings Int           @default(0)
-  averageRating Decimal?
-  favoriteCount Int          @default(0)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id               String           @id @default(cuid())
+  name             String
+  description      String?
+  category         TemplateCategory
+  duration         Int // in seconds
+  aspectRatio      String // "16:9", "9:16", "1:1"
+  resolution       String // "720p", "1080p", "4k"
+  tags             String?
+  thumbnail        String
+  previewUrl       String?
+  templateData     String // JSON string of template configuration
+  usageCount       Int              @default(0)
+  rating           Decimal?
+  isPublic         Boolean          @default(true)
+  moderationStatus String?          @default("approved") // "pending", "approved", "rejected", "flagged"
+  totalRatings     Int              @default(0)
+  averageRating    Decimal?
+  favoriteCount    Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   // Relationships
   createdById String?
-  createdBy   User?          @relation("TemplateCreatedBy", fields: [createdById], references: [id])
+  createdBy   User?               @relation("TemplateCreatedBy", fields: [createdById], references: [id])
   ratings     TemplateRating[]
   favorites   TemplateFavorite[]
   moderation  TemplateModeration?
   analytics   TemplateAnalytics[]
 
   @@unique([name])
-  @@map("templates")
   @@index([moderationStatus])
   @@index([isPublic, favoriteCount, averageRating, usageCount, createdAt])
   @@index([category])
+  @@map("templates")
 }
 
 model TemplateRating {
   id        String   @id @default(cuid())
-  rating    Decimal  @db.Decimal(3,2)
+  rating    Decimal  @db.Decimal(3, 2)
   comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -390,9 +398,9 @@ model TemplateRating {
   user       User     @relation("TemplateRatingUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, userId])
-  @@map("template_ratings")
   @@index([templateId])
   @@index([userId])
+  @@map("template_ratings")
 }
 
 model TemplateFavorite {
@@ -406,29 +414,29 @@ model TemplateFavorite {
   user       User     @relation("TemplateFavoriteUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, userId])
-  @@map("template_favorites")
   @@index([templateId])
   @@index([userId])
+  @@map("template_favorites")
 }
 
 model TemplateModeration {
-  id             String   @id @default(cuid())
-  status         String   @default("pending")  // "pending", "approved", "rejected", "flagged"
-  moderatorId    String?
+  id              String    @id @default(cuid())
+  status          String    @default("pending") // "pending", "approved", "rejected", "flagged"
+  moderatorId     String?
   rejectionReason String?
-  moderatedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  moderatedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relationships
-  templateId  String
-  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  moderator   User?    @relation("TemplateModerationUser", fields: [moderatorId], references: [id])
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  moderator  User?    @relation("TemplateModerationUser", fields: [moderatorId], references: [id])
 
   @@unique([templateId])
-  @@map("template_moderation")
   @@index([templateId])
   @@index([status])
+  @@map("template_moderation")
 }
 
 model TemplateAnalytics {
@@ -446,86 +454,86 @@ model TemplateAnalytics {
   template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, date])
-  @@map("template_analytics")
   @@index([templateId])
   @@index([date])
+  @@map("template_analytics")
 }
 
 model MediaAsset {
-  id          String         @id @default(cuid())
-  name        String
-  fileName    String
-  type        MediaType
-  category    String?
-  url         String
-  thumbnail   String?
-  duration    Int?           // for video/audio
-  fileSize    BigInt?
-  resolution  String?        // for images/video
-  metadata    String?
-  isPublic    Boolean        @default(false)
-  createdAt   DateTime       @default(now())
+  id         String    @id @default(cuid())
+  name       String
+  fileName   String
+  type       MediaType
+  category   String?
+  url        String
+  thumbnail  String?
+  duration   Int? // for video/audio
+  fileSize   BigInt?
+  resolution String? // for images/video
+  metadata   String?
+  isPublic   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
 
   // Relationships
   uploadedById String?
-  uploadedBy   User?         @relation("MediaAssetUploadedBy", fields: [uploadedById], references: [id])
+  uploadedBy   User?   @relation("MediaAssetUploadedBy", fields: [uploadedById], references: [id])
 
   @@unique([name])
   @@map("media_assets")
 }
 
 model BetaAccessEntry {
-  id          String   @id @default(cuid())
-  email       String?  @unique
-  inviteCode  String?  @unique
-  note        String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  email      String?  @unique
+  inviteCode String?  @unique
+  note       String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Relationships
   createdById String?
-  createdBy   User?    @relation("BetaAccessCreatedBy", fields: [createdById], references: [id])
+  createdBy   User?   @relation("BetaAccessCreatedBy", fields: [createdById], references: [id])
 
-  @@map("beta_access_entries")
   @@index([email])
   @@index([inviteCode])
   @@index([isActive])
+  @@map("beta_access_entries")
 }
 
 // Usage and Analytics
 model UsageRecord {
-  id           String      @id @default(cuid())
-  action       String      // "video_created", "ai_generation", "export"
-  resourceType String?     // Type of resource being used
-  quantity     Int         @default(1)
+  id           String   @id @default(cuid())
+  action       String // "video_created", "ai_generation", "export"
+  resourceType String? // Type of resource being used
+  quantity     Int      @default(1)
   metadata     String?
   cost         Decimal?
-  timestamp    DateTime    @default(now())
+  timestamp    DateTime @default(now())
 
   // Relationships
-  userId    String
-  user      User        @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  @@map("usage_records")
   @@index([userId])
   @@index([action])
   @@index([timestamp])
   @@index([userId, action, timestamp])
+  @@map("usage_records")
 }
 
 model UserAnalytics {
-  id        String   @id @default(cuid())
-  date      DateTime
-  videosCreated Int  @default(0)
-  aiGenerations Int  @default(0)
-  exportsGenerated Int @default(0)
-  collaborationTime Int @default(0) // in minutes
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  date              DateTime
+  videosCreated     Int      @default(0)
+  aiGenerations     Int      @default(0)
+  exportsGenerated  Int      @default(0)
+  collaborationTime Int      @default(0) // in minutes
+  createdAt         DateTime @default(now())
 
   // Relationships
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   @@unique([userId, date])
   @@map("user_analytics")
@@ -536,43 +544,43 @@ model VideoAnalytics {
   views     Int      @default(0)
   shares    Int      @default(0)
   downloads Int      @default(0)
-  duration  Int?     // total watch time in seconds
+  duration  Int? // total watch time in seconds
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relationships
-  videoId   String
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
-  @@map("video_analytics")
   @@index([videoId])
   @@index([views])
   @@index([shares])
+  @@map("video_analytics")
 }
 
 // Subscriptions and Payments
 model Subscription {
-  id                String           @id @default(cuid())
-  status            SubscriptionStatus
-  plan              String           // "free", "starter", "pro", "enterprise"
+  id                 String             @id @default(cuid())
+  status             SubscriptionStatus
+  plan               String // "free", "starter", "pro", "enterprise"
   currentPeriodStart DateTime
   currentPeriodEnd   DateTime
-  cancelAtPeriodEnd Boolean          @default(false)
-  canceledAt        DateTime?
-  metadata          String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  cancelAtPeriodEnd  Boolean            @default(false)
+  canceledAt         DateTime?
+  metadata           String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   // Relationships
-  userId            String
-  user              User             @relation(fields: [userId], references: [id])
-  payments          Payment[]
+  userId   String
+  user     User      @relation(fields: [userId], references: [id])
+  payments Payment[]
 
-  @@map("subscriptions")
   @@index([userId])
   @@index([status])
   @@index([plan])
   @@index([canceledAt])
+  @@map("subscriptions")
 }
 
 model Payment {
@@ -589,32 +597,32 @@ model Payment {
   isRelatedParty  Boolean       @default(false)
 
   // Relationships
-  userId          String
-  user            User          @relation(fields: [userId], references: [id])
-  subscriptionId  String?
-  subscription    Subscription? @relation(fields: [subscriptionId], references: [id])
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
 
-  @@map("payments")
   @@index([userId])
   @@index([createdAt])
   @@index([status])
+  @@map("payments")
 }
 
 model Invoice {
-  id              String      @id @default(cuid())
-  number          String      @unique
-  amount          Decimal
-  currency        String      @default("usd")
-  status          InvoiceStatus
-  dueDate         DateTime
-  paidAt          DateTime?
-  createdAt       DateTime    @default(now())
+  id        String        @id @default(cuid())
+  number    String        @unique
+  amount    Decimal
+  currency  String        @default("usd")
+  status    InvoiceStatus
+  dueDate   DateTime
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
 
   // Relationships
-  organizationId  String?
-  organization    Organization? @relation(fields: [organizationId], references: [id])
-  planId          String?
-  plan            OrganizationPlan? @relation(fields: [planId], references: [id])
+  organizationId String?
+  organization   Organization?     @relation(fields: [organizationId], references: [id])
+  planId         String?
+  plan           OrganizationPlan? @relation(fields: [planId], references: [id])
 
   @@map("invoices")
 }
@@ -627,23 +635,23 @@ model Session {
   createdAt DateTime @default(now())
 
   // Relationships
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
 }
 
 model ApiKey {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  key       String   @unique
+  key       String    @unique
   lastUsed  DateTime?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
 
   // Relationships
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("api_keys")
 }
@@ -658,13 +666,13 @@ model Notification {
   createdAt DateTime         @default(now())
 
   // Relationships
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("notifications")
   @@index([userId])
   @@index([read])
   @@index([userId, read])
+  @@map("notifications")
 }
 
 model AuditLog {
@@ -678,13 +686,13 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   // Relationships
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
-  @@map("audit_logs")
   @@index([userId])
   @@index([timestamp])
   @@index([action])
+  @@map("audit_logs")
 }
 
 // Enums
@@ -712,44 +720,211 @@ enum SSOProvider {
 /// A voice cloned from the user's own recording via ElevenLabs voice-add.
 /// providerVoiceId is the ElevenLabs voice id used for TTS. Pro plans only.
 model ClonedVoice {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  providerVoiceId String
-  name            String
-  createdAt       DateTime @default(now())
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerVoiceId    String
+  name               String
+  consentVersion     String
+  consentedAt        DateTime
+  subjectName        String?
+  authorizationBasis String
+  trainingAllowed    Boolean   @default(false)
+  revokedAt          DateTime?
+  providerDeletedAt  DateTime?
+  createdAt          DateTime  @default(now())
 
   @@unique([userId, providerVoiceId])
-  @@map("cloned_voices")
   @@index([userId])
+  @@index([userId, revokedAt])
+  @@map("cloned_voices")
+}
+
+/// Versioned, revocable permission. Content/voice/likeness are separate so
+/// accepting analytics never silently authorizes biometric or training use.
+model LearningConsent {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose       String // "product_improvement" (toggle, superseding rows) | "voice_clone" (append-only audit trail) — see lib/learning-consent.ts
+  granted       Boolean
+  policyVersion String
+  source        String    @default("settings")
+  evidence      String?
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+
+  @@index([userId, purpose, createdAt])
+  @@map("learning_consents")
+}
+
+/// One normalized record per generated output/candidate. This is the safe,
+/// structured learning substrate: no provider credentials and no raw customer
+/// media are stored here.
+model GenerationEvaluation {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId           String
+  video             Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  candidateGroupId  String?
+  provider          String
+  model             String?
+  modelVersion      String?
+  promptVersion     String   @default("v1")
+  storyboardVersion String   @default("v1")
+  vertical          String?
+  language          String?
+  platform          String?
+  latencyMs         Int?
+  estimatedCostUsd  Decimal?
+  qualityScore      Int?
+  qualityPassed     Boolean?
+  factualPassed     Boolean?
+  customerRating    Int?
+  customerAccepted  Boolean?
+  selectedCandidate Boolean  @default(false)
+  retryCount        Int      @default(0)
+  failureReason     String?
+  editSummary       String?
+  metrics           Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([videoId])
+  @@index([candidateGroupId])
+  @@index([provider, model, vertical, language])
+  @@index([userId, createdAt])
+  @@map("generation_evaluations")
+}
+
+/// Historical provider evidence used by the deterministic router. It persists
+/// across deploys, unlike the runtime circuit breaker.
+model ProviderObservation {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId      String?
+  video        Video?   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  provider     String
+  model        String?
+  operation    String
+  vertical     String?
+  language     String?
+  latencyMs    Int
+  costUsd      Decimal?
+  qualityScore Int?
+  succeeded    Boolean
+  errorCode    String?
+  createdAt    DateTime @default(now())
+
+  @@index([provider, model, operation, createdAt])
+  @@index([vertical, language])
+  @@index([userId, createdAt])
+  @@map("provider_observations")
+}
+
+model LocalizationProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultLocale      String   @default("en-US")
+  regionalPreference String?
+  tone               String   @default("professional")
+  formality          String   @default("neutral")
+  glossary           Json     @default("{}")
+  pronunciations     Json     @default("[]")
+  requireHumanReview Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+
+  @@map("localization_profiles")
+}
+
+model TranslationMemory {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceLanguage   String
+  targetLanguage   String
+  sourceTextHash   String
+  sourceText       String
+  approvedText     String
+  approvedByUserId String
+  approvedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, sourceLanguage, targetLanguage, sourceTextHash])
+  @@index([userId, targetLanguage])
+  @@map("translation_memory")
+}
+
+/// Versioned prompt/template/router configuration with staged rollout.
+model OptimizationArtifact {
+  id               String                   @id @default(cuid())
+  kind             String // "prompt" | "template" | "router" | "caption"
+  key              String
+  version          Int
+  status           String                   @default("DRAFT") // DRAFT|APPROVED|CANARY|ACTIVE|ROLLED_BACK
+  config           Json
+  baselineId       String?
+  canaryPercent    Int                      @default(0)
+  offlineScore     Float?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  activatedAt      DateTime?
+  rolledBackAt     DateTime?
+  rollbackReason   String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  assignments      OptimizationAssignment[]
+
+  @@unique([kind, key, version])
+  @@index([kind, key, status])
+  @@map("optimization_artifacts")
+}
+
+model OptimizationAssignment {
+  id         String               @id @default(cuid())
+  artifactId String
+  artifact   OptimizationArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bucket     Int
+  createdAt  DateTime             @default(now())
+
+  @@unique([artifactId, userId])
+  @@index([userId])
+  @@map("optimization_assignments")
 }
 
 /// Per-user branding applied at render time. Paid plans only (see lib/plan.ts).
 model BrandKit {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// Logo overlaid on the video (CDN url).
-  logoUrl        String?
+  logoUrl      String?
   /// 0.0-1.0, corner placement.
-  logoOpacity    Float    @default(0.85)
-  logoPosition   String   @default("bottom-right")
+  logoOpacity  Float   @default(0.85)
+  logoPosition String  @default("bottom-right")
 
   /// Caption colour, as #RRGGBB.
-  primaryColor   String?
+  primaryColor String?
   /// Absolute path or url of a .ttf used for captions.
-  fontFamily     String?
+  fontFamily   String?
 
   /// Short clips prepended/appended to every render (CDN urls).
-  introUrl       String?
-  outroUrl       String?
+  introUrl String?
+  outroUrl String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("brand_kits")
   @@index([userId])
+  @@map("brand_kits")
 }
 
 /// Purchased-credit ledger — the second of the two credit pools (see lib/quota.ts).
@@ -771,11 +946,11 @@ model CreditLedger {
   stripeSessionId String?  @unique
   createdAt       DateTime @default(now())
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("credit_ledger")
   @@index([userId])
   @@index([videoId])
+  @@map("credit_ledger")
 }
 
 /// A user's own referral code (one row per user, created on first visit to the
@@ -841,7 +1016,7 @@ model AdCampaign {
 /// marketing axes under test plus performance (isWinner / roas) for the winners
 /// library + "make more like this" loop.
 model AdCreative {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   userId               String
   campaignId           String
   videoId              String?
@@ -853,7 +1028,7 @@ model AdCreative {
   /// Set by lib/ad-performance.ts ONLY for a creative with total* data
   /// imported below — a creative with none keeps whatever a customer set via
   /// the manual PATCH /api/ad-studio/creatives/[id] endpoint untouched.
-  isWinner             Boolean  @default(false)
+  isWinner             Boolean   @default(false)
   roas                 Float?
   /// Ad spend/impressions/clicks the customer imported from their OWN ad
   /// platform dashboard (see lib/ad-performance.ts) — never pulled via an API,
@@ -869,15 +1044,15 @@ model AdCreative {
   recommendationReason String?
   expectedResult       String?
   estimatedCostCents   Int?
-  rightsStatus         String   @default("UNCONFIRMED") // "UNCONFIRMED" | "CONFIRMED"
-  approvalStatus       String   @default("AWAITING_REVIEW") // "AWAITING_REVIEW" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"
-  revision             Int      @default(1)
+  rightsStatus         String    @default("UNCONFIRMED") // "UNCONFIRMED" | "CONFIRMED"
+  approvalStatus       String    @default("AWAITING_REVIEW") // "AWAITING_REVIEW" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED"
+  revision             Int       @default(1)
   approvedRevision     Int?
   approvedAt           DateTime?
   approvedByUserId     String?
   reviewNote           String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([userId])
   @@index([campaignId])
@@ -948,7 +1123,7 @@ model InventoryItem {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  snapshots   InventorySnapshot[]
+  snapshots InventorySnapshot[]
 
   @@unique([userId, vertical, externalRef])
   @@index([userId, vertical])
@@ -976,24 +1151,24 @@ model InventorySnapshot {
 /// A customer-authorized recurring inventory connection. Secrets are stored as
 /// one AES-GCM encrypted JSON blob and are never returned by an API.
 model InventorySource {
-  id                   String    @id @default(cuid())
-  userId               String
-  name                 String
-  vertical             String
-  feedUrl              String
-  credentialCiphertext String?
-  fieldMapping         String?   // JSON object: ForgeVid field -> source field
-  authorizationBasis   String
+  id                     String    @id @default(cuid())
+  userId                 String
+  name                   String
+  vertical               String
+  feedUrl                String
+  credentialCiphertext   String?
+  fieldMapping           String? // JSON object: ForgeVid field -> source field
+  authorizationBasis     String
   authorizationExpiresAt DateTime?
-  enabled              Boolean   @default(true)
-  scheduleEnabled      Boolean   @default(false)
-  cadence              String    @default("daily")
-  nextRunAt             DateTime?
-  lastRunAt             DateTime?
-  lastSuccessAt         DateTime?
-  lastError             String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  enabled                Boolean   @default(true)
+  scheduleEnabled        Boolean   @default(false)
+  cadence                String    @default("daily")
+  nextRunAt              DateTime?
+  lastRunAt              DateTime?
+  lastSuccessAt          DateTime?
+  lastError              String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   runs InventoryImportRun[]
 
@@ -1003,16 +1178,16 @@ model InventorySource {
 }
 
 model InventoryImportRun {
-  id         String          @id @default(cuid())
-  sourceId   String
-  source     InventorySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  status     String          @default("PENDING")
-  itemsRead  Int             @default(0)
-  itemsValid Int             @default(0)
-  itemsFailed Int            @default(0)
-  errorArchive String?       // JSON array of row-safe validation errors
-  startedAt  DateTime        @default(now())
-  finishedAt DateTime?
+  id           String          @id @default(cuid())
+  sourceId     String
+  source       InventorySource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  status       String          @default("PENDING")
+  itemsRead    Int             @default(0)
+  itemsValid   Int             @default(0)
+  itemsFailed  Int             @default(0)
+  errorArchive String? // JSON array of row-safe validation errors
+  startedAt    DateTime        @default(now())
+  finishedAt   DateTime?
 
   @@index([sourceId, startedAt])
   @@map("inventory_import_runs")
@@ -1020,17 +1195,17 @@ model InventoryImportRun {
 
 /// Rights provenance for each customer-supplied inventory asset.
 model InventoryAssetAuthorization {
-  id            String    @id @default(cuid())
-  userId        String
-  inventoryItemId String?
-  assetUrl      String
-  sourceUrl     String?
+  id                 String    @id @default(cuid())
+  userId             String
+  inventoryItemId    String?
+  assetUrl           String
+  sourceUrl          String?
   authorizationBasis String
-  authorizedBy  String?
-  expiresAt     DateTime?
-  revokedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  authorizedBy       String?
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@unique([userId, assetUrl])
   @@index([userId, revokedAt, expiresAt])
@@ -1039,18 +1214,18 @@ model InventoryAssetAuthorization {
 }
 
 model GrowthScoringSettings {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  agingWeight        Int      @default(1)
-  missingVideoWeight Int      @default(30)
-  priceChangeWeight  Int      @default(25)
-  newArrivalWeight   Int      @default(15)
-  seasonalWeight     Int      @default(0)
-  seasonalMonths     String   @default("[]")
-  revenueAtRiskMethod String  @default("none")
-  revenueAtRiskWeight Int     @default(0)
-  updatedAt          DateTime @updatedAt
-  createdAt          DateTime @default(now())
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  agingWeight         Int      @default(1)
+  missingVideoWeight  Int      @default(30)
+  priceChangeWeight   Int      @default(25)
+  newArrivalWeight    Int      @default(15)
+  seasonalWeight      Int      @default(0)
+  seasonalMonths      String   @default("[]")
+  revenueAtRiskMethod String   @default("none")
+  revenueAtRiskWeight Int      @default(0)
+  updatedAt           DateTime @updatedAt
+  createdAt           DateTime @default(now())
 
   @@map("growth_scoring_settings")
 }
@@ -1124,23 +1299,23 @@ model CreativeEvent {
 /// A customer-recorded downstream outcome attributed to an approved creative.
 /// Revenue is never inferred: the customer supplies the event and amount.
 model GrowthConversion {
-  id            String   @id @default(cuid())
-  userId        String
-  creativeId    String
-  kind          String   // "qualified_lead" | "appointment" | "sale" | "retained"
-  source        String   @default("manual") // "manual" | "csv" | "crm"
-  externalId    String?
-  contactRef    String?  // customer-controlled non-sensitive reference
-  revenueCents  Int?
-  currency      String   @default("usd")
-  notes         String?
-  occurredAt    DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  userId       String
+  creativeId   String
+  kind         String // "qualified_lead" | "appointment" | "sale" | "retained"
+  source       String   @default("manual") // "manual" | "csv" | "crm"
+  externalId   String?
+  contactRef   String? // customer-controlled non-sensitive reference
+  revenueCents Int?
+  currency     String   @default("usd")
+  notes        String?
+  occurredAt   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
+  @@unique([userId, source, externalId])
   @@index([userId, occurredAt])
   @@index([creativeId])
-  @@unique([userId, source, externalId])
   @@map("growth_conversions")
 }
 
@@ -1157,17 +1332,17 @@ model ImpactAssumption {
 }
 
 model GrowthOperatorSchedule {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  enabled         Boolean  @default(false)
-  cadence         String   @default("daily") // "daily" | "weekly"
-  emailEnabled    Boolean  @default(true)
-  maxDecisions    Int      @default(1)
-  nextRunAt       DateTime?
-  lastRunAt       DateTime?
-  lastError       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  enabled      Boolean   @default(false)
+  cadence      String    @default("daily") // "daily" | "weekly"
+  emailEnabled Boolean   @default(true)
+  maxDecisions Int       @default(1)
+  nextRunAt    DateTime?
+  lastRunAt    DateTime?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([enabled, nextRunAt])
   @@map("growth_operator_schedules")
@@ -1176,18 +1351,18 @@ model GrowthOperatorSchedule {
 /// Tamper-evident, append-only audit chain. Database triggers reject UPDATE
 /// and DELETE so corrections are represented by superseding records.
 model EvidenceRecord {
-  id             String   @id @default(cuid())
-  sequence       BigInt   @unique
-  kind           String
-  entityType     String?
-  entityId       String?
-  actorUserId    String?
-  payload        String
-  payloadHash    String
-  previousHash   String
-  recordHash     String   @unique
-  supersedesId   String?
-  createdAt      DateTime @default(now())
+  id           String   @id @default(cuid())
+  sequence     BigInt   @unique
+  kind         String
+  entityType   String?
+  entityId     String?
+  actorUserId  String?
+  payload      String
+  payloadHash  String
+  previousHash String
+  recordHash   String   @unique
+  supersedesId String?
+  createdAt    DateTime @default(now())
 
   @@index([kind, createdAt])
   @@index([entityType, entityId])
@@ -1212,17 +1387,17 @@ model CampaignApprovalEvent {
 }
 
 model GenerationDeadLetter {
-  id          String   @id @default(cuid())
-  userId      String
-  videoId     String
-  kind        String
-  jobData     String
-  error       String
-  attempts    Int
-  status      String   @default("PENDING") // "PENDING" | "REPLAYED" | "RESOLVED"
-  replayedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String    @id @default(cuid())
+  userId     String
+  videoId    String
+  kind       String
+  jobData    String
+  error      String
+  attempts   Int
+  status     String    @default("PENDING") // "PENDING" | "REPLAYED" | "RESOLVED"
+  replayedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([userId, status, createdAt])
   @@index([videoId])
@@ -1253,6 +1428,7 @@ enum VideoStatus {
   DRAFT // created (e.g. from a template) but never rendered
   QUEUED // generation job enqueued, not yet picked up
   PROCESSING
+  REVIEW_REQUIRED // automated checks failed; never exposed as a completed deliverable
   COMPLETED
   FAILED
   CANCELLED
@@ -1359,4 +1535,3 @@ model ContentReport {
   @@index([videoId])
   @@map("content_reports")
 }
-

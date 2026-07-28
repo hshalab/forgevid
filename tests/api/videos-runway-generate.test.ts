@@ -19,6 +19,9 @@ jest.mock('@/lib/quota', () => ({
   settleGenerationEntitlement: jest.fn(),
 }))
 jest.mock('@/lib/provider-job-poll', () => ({ pollProviderJobToCompletion: jest.fn() }))
+jest.mock('@/lib/learning-system', () => ({ recordProviderObservation: jest.fn() }))
+jest.mock('@/lib/learning-consent', () => ({ allowsProductImprovement: jest.fn().mockResolvedValue(true) }))
+jest.mock('@/lib/provider-router', () => ({ recommendFrontierModels: jest.fn().mockResolvedValue([]) }))
 jest.mock('@/lib/plan', () => ({ allowsFrontierGeneration: jest.fn(), getUserPlan: jest.fn() }))
 jest.mock('@/lib/prisma', () => ({
   prisma: { video: { create: jest.fn() } },
@@ -187,5 +190,7 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     expect(body.minDuration).toBe(2)
     expect(body.maxDuration).toBe(10)
     expect(body.aspectRatios).toEqual(['16:9', '9:16', '1:1'])
+    // The learning system's router ranking rides along for the picker.
+    expect(body.recommendations).toEqual([])
   })
 })

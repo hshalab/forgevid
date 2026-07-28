@@ -89,7 +89,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ videoId:
     );
   }
 
-  const presetScenes = await localizedPresetScenes(scenes, targetLanguage);
+  const presetScenes = await localizedPresetScenes(scenes, targetLanguage, {
+    userId: access.userId,
+    sourceLanguage: request.language ?? 'en',
+  });
   const resolvedVoiceId = await resolveVoiceIdForUser(access.userId, voiceId ?? request.voiceId);
 
   const genInput: GenerationInput = {

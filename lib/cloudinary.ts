@@ -154,6 +154,34 @@ export async function deleteResource(publicId: string, resourceType: 'image' | '
   }
 }
 
+/** Extract a Cloudinary public id from a delivery URL; returns null for any other host. */
+export function cloudinaryPublicIdFromUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.hostname !== 'res.cloudinary.com') return null;
+    const marker = '/upload/';
+    const at = url.pathname.indexOf(marker);
+    if (at < 0) return null;
+    const segments = url.pathname.slice(at + marker.length).split('/').filter(Boolean);
+    while (segments[0] && (segments[0].includes(',') || /^v\d+$/.test(segments[0]))) segments.shift();
+    if (!segments.length) return null;
+    return decodeURIComponent(segments.join('/')).replace(/\.[a-z0-9]+$/i, '');
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCloudinaryUrl(
+  value: string | null | undefined,
+  resourceType: 'image' | 'video' = 'video',
+): Promise<boolean> {
+  const publicId = cloudinaryPublicIdFromUrl(value);
+  if (!publicId) return false;
+  await deleteResource(publicId, resourceType);
+  return true;
+}
+
 /**
  * Get video thumbnail
  */

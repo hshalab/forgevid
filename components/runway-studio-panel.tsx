@@ -21,6 +21,8 @@ interface RunwayAvailability {
   minDuration: number
   maxDuration: number
   aspectRatios: string[]
+  /** Evidence-based ranking from the learning system's provider router, best first. */
+  recommendations?: { model: string; reason: string; evidenceCount: number }[]
 }
 
 /**
@@ -59,7 +61,11 @@ export function RunwayStudioPanel() {
       }
       if (!res.ok) throw new Error(data?.error || "Could not load AI video options")
       setAvailability(data)
-      setModel(data.models?.[0]?.id ?? "")
+      // Default to the learning system's top recommendation when it names a
+      // model this panel actually exposes; first curated model otherwise.
+      const recommended = data.recommendations?.[0]?.model
+      const models: RunwayModel[] = data.models ?? []
+      setModel(models.some((m: RunwayModel) => m.id === recommended) ? recommended : models[0]?.id ?? "")
       setState("ready")
     } catch (error) {
       setState("error")
@@ -94,9 +100,9 @@ export function RunwayStudioPanel() {
         errorFallback: "AI video generation failed",
         timeoutMessage: "AI video generation timed out",
       })
-      setVideoUrl(result.videoUrl)
+      setVideoUrl(result.videoUrl ?? result.reviewPreviewUrl)
       setProgress(100)
-      toast.success("AI video ready!")
+      toast.success(result.requiresReview ? "Video ready — held for your review in the AI Studio." : "AI video ready!")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "AI video generation failed")
     } finally {

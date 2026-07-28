@@ -15,6 +15,10 @@ import {
   MIN_DURATION_SECONDS,
   RUNWAY_ASPECT_RATIOS,
 } from '@/lib/runway-provider';
+import { RATES } from '@/lib/cost-ledger';
+import { recordProviderObservation } from '@/lib/learning-system';
+import { allowsProductImprovement } from '@/lib/learning-consent';
+import { recommendFrontierModels } from '@/lib/provider-router';
 
 /**
  * POST /api/videos/runway/generate — real AI-generated video from a text
@@ -118,6 +122,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const startedAt = Date.now();
     const taskId = await createTextToVideo({
       promptText: input.promptText,
       model: input.model,
@@ -149,13 +154,46 @@ export async function POST(req: NextRequest) {
     // quota/credits on a request that never actually started.
     await settleGenerationEntitlement(userId, video.id, input.duration, quota);
 
+    // The learning layer's evidence for the frontier-model router: one
+    // ProviderObservation per generation, recorded on the first terminal
+    // poll (operation 'frontier_video' — exactly what recommendFrontierModels
+    // aggregates). Consent-gated and best-effort: a ledger miss never
+    // affects the render or the billing path.
+    let observed = false;
+    const checkStatus = async () => {
+      const status = await getRunwayTaskStatus(taskId);
+      // completed-without-url is NOT terminal for the poll helper (it keeps
+      // waiting), so it isn't terminal for the observation either.
+      const terminal = status.status === 'failed' || (status.status === 'completed' && status.videoUrl);
+      if (!observed && terminal) {
+        observed = true;
+        if (await allowsProductImprovement(userId).catch(() => true)) {
+          void recordProviderObservation({
+            userId,
+            videoId: video.id,
+            provider: 'runway',
+            model: input.model,
+            operation: 'frontier_video',
+            latencyMs: Date.now() - startedAt,
+            // PER-SECOND, matching the router's predictedCostPerSecond
+            // semantics — recording duration * rate here would overstate
+            // cost-per-second by the clip length once evidence accumulates.
+            costUsd: status.status === 'completed' ? RATES.runwayPerSecond : null,
+            succeeded: status.status === 'completed',
+            errorCode: status.status === 'failed' ? (status.error ?? 'failed').slice(0, 200) : null,
+          }).catch((error) => console.warn('[videos/runway/generate] observation failed:', error));
+        }
+      }
+      return status;
+    };
+
     // Polling is lightweight (no local ffmpeg), so no render slot needed.
     void pollProviderJobToCompletion({
       videoId: video.id,
       userId,
       providerName: 'runway',
       prompt: input.promptText,
-      checkStatus: () => getRunwayTaskStatus(taskId),
+      checkStatus,
       // Runway is deterministic — it renders exactly the requested
       // duration, unlike HeyGen dub's translated-speech length, which can
       // vary. Billing the request's own duration is correct here.
@@ -203,11 +241,17 @@ export async function GET() {
     );
   }
 
+  // The router's evidence-based ranking over the same curated models —
+  // conservative priors until real observations accumulate. Best-effort:
+  // a router hiccup must not take down the whole pre-flight.
+  const recommendations = await recommendFrontierModels({ priority: 'balanced' }).catch(() => []);
+
   return NextResponse.json({
     models: RUNWAY_VIDEO_MODELS.map((id) => ({ id, label: MODEL_LABELS[id] })),
     creditCost: RUNWAY_CREDIT_COST,
     minDuration: MIN_DURATION_SECONDS,
     maxDuration: MAX_DURATION_SECONDS,
     aspectRatios: RUNWAY_ASPECT_RATIOS,
+    recommendations,
   });
 }

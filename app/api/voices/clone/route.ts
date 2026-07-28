@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { allowsVoiceCloning, getUserPlan } from '@/lib/plan';
 import { cloneVoiceFromSample, isVoiceCloningConfigured } from '@/lib/cloned-voices';
+import { recordLearningConsent } from '@/lib/learning-consent';
 
 /**
  * POST /api/voices/clone — clone a narration voice from the user's recording.
@@ -49,9 +50,17 @@ export async function POST(req: NextRequest) {
 
   let name = '';
   let file: File | null = null;
+  let consentConfirmed = false;
+  let authorizationBasis = '';
+  let subjectName = '';
+  let trainingAllowed = false;
   try {
     const form = await req.formData();
     name = String(form.get('name') ?? '').trim();
+    consentConfirmed = String(form.get('consentConfirmed') ?? '') === 'true';
+    authorizationBasis = String(form.get('authorizationBasis') ?? '');
+    subjectName = String(form.get('subjectName') ?? '').trim();
+    trainingAllowed = String(form.get('trainingAllowed') ?? '') === 'true';
     const value = form.get('file');
     if (value instanceof File) file = value;
   } catch {
@@ -60,6 +69,15 @@ export async function POST(req: NextRequest) {
 
   if (!name || name.length > 80) {
     return NextResponse.json({ error: 'A voice name (max 80 chars) is required' }, { status: 400 });
+  }
+  if (!consentConfirmed || !['self', 'authorized'].includes(authorizationBasis)) {
+    return NextResponse.json(
+      { error: 'Explicit voice consent and a valid authorization basis are required' },
+      { status: 400 },
+    );
+  }
+  if (authorizationBasis === 'authorized' && !subjectName) {
+    return NextResponse.json({ error: 'The voice subject name is required' }, { status: 400 });
   }
   if (!file) return NextResponse.json({ error: 'No audio sample provided' }, { status: 400 });
   if (!ALLOWED_TYPES.has(file.type)) {
@@ -79,7 +97,23 @@ export async function POST(req: NextRequest) {
       sample: Buffer.from(await file.arrayBuffer()),
       sampleFilename: file.name || 'sample.mp3',
       sampleMimeType: file.type,
+      consentVersion: 'voice-consent-v1',
+      subjectName: subjectName || session.user.name || null,
+      authorizationBasis: authorizationBasis as 'self' | 'authorized',
+      trainingAllowed,
     });
+    // Audit trail in the consent ledger, beyond the columns on the voice row
+    // itself — one row per consent event, revocations appended by DELETE
+    // /api/voices/[id]. Best-effort: a ledger hiccup must not orphan a
+    // voice that was already created at the provider.
+    void recordLearningConsent({
+      userId: session.user.id,
+      purpose: 'voice_clone',
+      granted: true,
+      source: 'voice_clone',
+      policyVersion: 'voice-consent-v1',
+      evidence: { voiceId: voice.id, providerVoiceId: voice.providerVoiceId, authorizationBasis, subjectName: subjectName || null, trainingAllowed },
+    }).catch((error) => console.warn('[voices/clone] consent ledger append failed:', error));
     return NextResponse.json({ voice });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Voice cloning failed';

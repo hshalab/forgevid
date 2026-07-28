@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { deleteCloudinaryUrl } from '@/lib/cloudinary';
 
 export async function POST(request: NextRequest) {
   try {
@@ -146,16 +147,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Not found or unauthorized' }, { status: 404 });
     }
 
-    await prisma.mediaAsset.delete({
-      where: { id: assetId },
-    });
-
-    // Production-ready Cloudinary deletion with error handling
-    // When Cloudinary is integrated, this will delete from cloud storage:
-    // if (asset.cloudinaryPublicId) {
-    //   await cloudinary.uploader.destroy(asset.cloudinaryPublicId);
-    // }
-    console.log(`Asset ${assetId} deleted from database. Cloud storage cleanup ready for Cloudinary integration.`);
+    // Delete the remote object first. If Cloudinary is temporarily unavailable,
+    // keep the database row so the deletion can be retried without losing its id.
+    await deleteCloudinaryUrl(asset.url, asset.type === 'IMAGE' ? 'image' : 'video');
+    if (asset.thumbnail && asset.thumbnail !== asset.url) {
+      await deleteCloudinaryUrl(asset.thumbnail, 'image');
+    }
+    await prisma.mediaAsset.delete({ where: { id: assetId } });
     
     return NextResponse.json({ message: 'Asset deleted' });
   } catch (error) {

@@ -36,22 +36,31 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ videoId:
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  let generation: any = null;
+  let meta: any = {};
   try {
-    generation = video.metadata ? JSON.parse(video.metadata).generation ?? null : null;
+    meta = video.metadata ? JSON.parse(video.metadata) : {};
   } catch {
-    generation = null;
+    meta = {};
   }
+  const generation: any = meta.generation ?? null;
 
   const done = video.status === 'COMPLETED';
+  const requiresReview = video.status === 'REVIEW_REQUIRED';
   const videoUrl = video.fileUrl || video.url || generation?.videoUrl || null;
 
   return NextResponse.json({
     videoId: video.id,
-    status: video.status, // PROCESSING | COMPLETED | FAILED | CANCELLED
-    stage: generation?.stage ?? (done ? 'done' : 'queued'),
-    percent: typeof generation?.percent === 'number' ? generation.percent : done ? 100 : 0,
+    status: video.status,
+    stage: generation?.stage ?? (done ? 'done' : requiresReview ? 'review_required' : 'queued'),
+    percent: typeof generation?.percent === 'number' ? generation.percent : done || requiresReview ? 100 : 0,
     videoUrl: done ? videoUrl : null,
+    reviewPreviewUrl: requiresReview ? videoUrl : null,
+    requiresReview,
+    // The pipeline persists these at metadata top level (writeProgress's
+    // extraMeta), NOT under metadata.generation — same place the
+    // quality-review route reads them from.
+    qualityGate: requiresReview ? meta.qualityGate ?? null : undefined,
+    factCheck: requiresReview ? meta.factCheck ?? null : undefined,
     thumbnail: video.thumbnail ?? null,
     error: video.status === 'FAILED' ? generation?.error ?? 'Generation failed' : null,
   });

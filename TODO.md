@@ -1617,3 +1617,75 @@ clean with both new routes in the manifest.
 unlock GitHub Actions billing and both crons run themselves; re-run
 `scripts/seed-judge-demo.ts` against production before submitting so the
 judge account gets the preloaded inventory.
+
+## 2026-07-27 (night) — the controlled learning system: finished, tested, shipped
+
+Took over the parallel session's uncommitted four-layer learning system
+(quiet for 3+ hours, ~60% wired) and completed it. What the other session
+had built: the four libs (`lib/learning-system.ts` evaluations +
+observations, `lib/localization-memory.ts` translation memory + profiles,
+`lib/optimization-registry.ts` canary rollout, `lib/provider-router.ts`
+evidence-based frontier routing), the migration (7 tables + REVIEW_REQUIRED
+status + voice-consent columns), the pipeline's quality-gate hold, the
+quality-review and voice-revocation routes, real Cloudinary deletion, and
+voice-clone consent enforcement. What was missing — and is now done:
+
+- **REVIEW_REQUIRED would have hung every UI**: all five client poll loops
+  treated only COMPLETED/FAILED as terminal, so a held render spun until
+  timeout. The shared `pollAiJob` + all four inline loops now stop on it;
+  the AI Studio gained a review card (preview + flagged issues + Accept &
+  publish / Reject via the quality-review API) that also HYDRATES on page
+  load from the newest held video — without that, navigating away orphaned
+  the video with no way back to the decision.
+- **`learning_consents` had zero code**: built `lib/learning-consent.ts` —
+  `product_improvement` as a superseding toggle (default INCLUDED,
+  documented legitimate-interest basis; opt-out stops new recording in the
+  pipeline AND excludes prior observations from the router) and
+  `voice_clone` as an append-only audit trail written by clone/revoke.
+  User switch at `GET/PUT /api/user/learning-consent`.
+- **Router unexposed**: the Runway route now records one `frontier_video`
+  observation per generation (consent-gated, terminal-poll-once) and its
+  GET pre-flight serves `recommendFrontierModels()` rankings; the Frontier
+  AI panel defaults to the top recommendation.
+- **Localization memory unwired**: `translateNarrationLines` now reuses
+  human-approved translations verbatim (full-hit skips the LLM entirely),
+  splices memory hits with LLM misses positionally, and steers the LLM
+  with the profile's tone/formality/glossary. Managed via
+  `GET/PUT /api/user/localization-profile` and
+  `GET/POST/DELETE /api/user/translation-memory` — approvals only ever
+  come from the explicit POST, never auto-promoted.
+- **Optimization registry unwired**: the pipeline resolves the
+  `prompt/scene-planner` artifact per render (recording which version
+  served it — a no-op `v1` until an artifact exists) and
+  `/api/admin/optimizations` is the human-approval control surface
+  (create draft → approve → canary 1-50% → activate/rollback), every
+  transition appended to the evidence chain.
+
+**The review pass found 6 real defects in the combined work, all fixed**:
+(1) the jobs route read qualityGate/factCheck from `metadata.generation`
+but the pipeline persists them at metadata top level — the review card
+would have always shown an empty issues list; (2) accept/reject 500'd for
+opted-out users (no evaluation row to update — after already flipping the
+video to COMPLETED; updateMany fixes it); (3) ANOTHER mock-masked unit
+bug, same class as the payments one: the Runway observation recorded
+total-clip cost where the router consumes per-second — 5-10x cost
+overstatement against exactly the models with real evidence; (4) cloning
+voice B falsely stamped voice A's consent row as revoked (the superseding
+logic is right for toggles, wrong for audit trails — now append-only for
+voice_clone); (5) re-rendering any single scene flipped a held video
+straight to COMPLETED, bypassing the same quality gate the initial render
+enforces; (6) no UI path back to a held video after leaving the page.
+Also hardened: activate-from-DRAFT and approve-of-ACTIVE now refused in
+the registry; reject requires REVIEW_REQUIRED status too.
+
+Migration applied to production Railway Postgres BEFORE pushing
+(`prisma migrate status`: up to date, 28 migrations). Gates: tsc clean,
+**478 tests green (70 suites, up from 62/426)**, build clean with all six
+new routes.
+
+Known, deliberate: reject leaves the video in REVIEW_REQUIRED (no refund —
+the render happened and is watchable; refund-on-reject would be farmable);
+quota is consumed for held videos for the same reason. The fact-check +
+quality gate now BLOCK completion pending owner review — a deliberate
+change from the earlier advisory-only behavior, since the learning system
+is what makes the review loop actually usable.

@@ -9,7 +9,10 @@ import { Loader2, Star, VideoOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CreativeRow } from "./types"
 
-const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED"])
+// REVIEW_REQUIRED is terminal for polling: the render is done but held for
+// the owner's review in the AI Studio — keeping the interval running would
+// poll forever waiting for a COMPLETED that needs a human first.
+const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED", "REVIEW_REQUIRED"])
 const POLL_MS = 3000
 
 interface JobStatusResponse {
@@ -152,6 +155,11 @@ export function CreativeCard({
           <div className="flex flex-col items-center gap-2 text-red-400 text-sm px-4 text-center">
             <VideoOff className="h-6 w-6" />
             <span>{jobError || "This variant failed to render."}</span>
+          </div>
+        ) : status === "REVIEW_REQUIRED" ? (
+          <div className="flex flex-col items-center gap-2 text-amber-400 text-sm px-4 text-center">
+            <VideoOff className="h-6 w-6" />
+            <span>Held for your review — accept or reject it in the AI Studio.</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 text-gray-500 text-sm">

@@ -29,6 +29,9 @@ import { peekCachedSegments, synthesizeSceneVoiceovers } from './voiceover';
 import { sendExportCompleteEmail } from './email';
 import { rejectedClipUrls } from './clip-memory';
 import { checkNarrationFacts } from './fact-check';
+import { recordProviderObservation, upsertGenerationEvaluation } from './learning-system';
+import { allowsProductImprovement } from './learning-consent';
+import { resolveOptimization } from './optimization-registry';
 
 /**
  * "Your video is ready" — the come-back-to-a-finished-video loop. Best-effort:
@@ -233,6 +236,7 @@ export type GenerationStage =
   | 'script'
   | 'assembling'
   | 'uploading'
+  | 'review_required'
   | 'done'
   | 'failed';
 
@@ -253,6 +257,7 @@ const STAGE_PERCENT: Record<GenerationStage, number> = {
   script: 20,
   assembling: 55,
   uploading: 85,
+  review_required: 100,
   done: 100,
   failed: 100,
 };
@@ -389,6 +394,7 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
     const narrationPath = await audioAssetForVideo(videoId, input.narrationAssetId);
     // Their own music track beats the (possibly empty) bundled library.
     const musicOverride = await audioAssetForVideo(videoId, input.musicAssetId);
+    const renderStartedAt = Date.now();
     const { videoUrl, scenes, cues, thumbnailUrl, quality } = await generateVideoWithScenes({
       prompt: script,
       style: input.style,
@@ -425,21 +431,19 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
 
     await setStage(videoId, 'uploading');
 
+    const factCheck = checkNarrationFacts(scenes.map((s) => spokenLine(s)), input.prompt);
+    const requiresReview = !quality.passed || factCheck.flagged;
     const { width, height } = renderDims(aspectRatio, input.renderQuality ?? 'full');
     await prisma.video.update({
       where: { id: videoId },
       data: {
-        status: 'COMPLETED',
+        status: requiresReview ? 'REVIEW_REQUIRED' : 'COMPLETED',
         url: videoUrl,
         fileUrl: videoUrl,
         resolution: `${width}x${height}`,
         ...(thumbnailUrl ? { thumbnail: thumbnailUrl } : {}),
       },
     });
-    // Advisory hallucination check: did the finished narration state a number
-    // (a price, a mileage, a bed count) that never appeared in the prompt
-    // that generated it? Never blocks — see lib/fact-check.ts.
-    const factCheck = checkNarrationFacts(scenes.map((s) => spokenLine(s)), input.prompt);
     if (factCheck.flagged) {
       console.warn(
         `[Pipeline] Fact check flagged possibly invented number(s) in ${videoId}: ${factCheck.unsourcedNumbers.join(', ')}`,
@@ -449,14 +453,62 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
     // re-render individual scenes without re-deriving them from the prompt.
     await writeProgress(
       videoId,
-      { stage: 'done', percent: 100, videoUrl, provider: 'stock-assembler' },
+      {
+        stage: requiresReview ? 'review_required' : 'done',
+        percent: 100,
+        videoUrl,
+        provider: 'stock-assembler',
+      },
       // captions are persisted so they can be downloaded as SRT/VTT; the
       // quality report surfaces in the editor/admin when a render was flagged.
       { script, scenes, captions: cues, qualityGate: quality, factCheck },
     );
 
+    // Consent-gated: an opted-out user's renders leave no learning records
+    // at all (lib/learning-consent.ts documents the default-included basis).
+    if (owner && (await allowsProductImprovement(owner.userId).catch(() => true))) {
+      const latencyMs = Date.now() - renderStartedAt;
+      const qualityScore = quality.passed ? 100 : Math.max(0, 100 - (quality.issues?.length ?? 1) * 20);
+      // Which optimization artifact (if any) served this render — recorded so
+      // canaried prompt/config versions can be compared against baseline in
+      // the evaluations. resolveOptimization returns null until an artifact
+      // is actually created and activated via the admin registry, so this is
+      // a no-op ('v1') for every render until then.
+      const promptArtifact = await resolveOptimization('prompt', 'scene-planner', owner.userId).catch(() => null);
+      await Promise.all([
+        upsertGenerationEvaluation({
+          userId: owner.userId,
+          videoId,
+          provider: 'stock-assembler',
+          model: 'scene-assembler',
+          promptVersion: promptArtifact ? `v${promptArtifact.version}` : 'v1',
+          language: input.language,
+          latencyMs,
+          qualityScore,
+          qualityPassed: quality.passed,
+          factualPassed: !factCheck.flagged,
+          failureReason: requiresReview
+            ? [...(quality.issues ?? []), ...(factCheck.flagged ? ['Unverified narration facts'] : [])].join('; ')
+            : null,
+          metrics: { qualityGate: quality, factCheck },
+        }),
+        recordProviderObservation({
+          userId: owner.userId,
+          videoId,
+          provider: 'stock-assembler',
+          model: 'scene-assembler',
+          operation: 'video_generation',
+          language: input.language,
+          latencyMs,
+          qualityScore,
+          succeeded: !requiresReview,
+          errorCode: requiresReview ? 'REVIEW_REQUIRED' : null,
+        }),
+      ]).catch((error) => console.warn('[Pipeline] Evaluation recording failed:', error));
+    }
+
     await settle(true, input.prompt);
-    notifyRenderComplete(videoId).catch(() => {});
+    if (!requiresReview) notifyRenderComplete(videoId).catch(() => {});
     return videoUrl;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Video generation failed';
@@ -653,11 +705,15 @@ export async function rerenderVideo(videoId: string): Promise<string> {
     const { videoUrl, cues, thumbnailUrl } = assembled;
 
     await setStage(videoId, 'uploading');
+    // Same gate the initial render enforces — without this, re-rendering any
+    // single scene would flip a held/rejected video straight to COMPLETED
+    // even when the new output fails the same quality checks.
+    const rerenderRequiresReview = !assembled.quality.passed;
     const { width, height } = renderDims(aspectRatio, renderQuality);
     await prisma.video.update({
       where: { id: videoId },
       data: {
-        status: 'COMPLETED',
+        status: rerenderRequiresReview ? 'REVIEW_REQUIRED' : 'COMPLETED',
         url: videoUrl,
         fileUrl: videoUrl,
         resolution: `${width}x${height}`,
@@ -672,7 +728,12 @@ export async function rerenderVideo(videoId: string): Promise<string> {
     // the 15 cap.
     await writeProgress(
       videoId,
-      { stage: 'done', percent: 100, videoUrl, provider: 'stock-assembler' },
+      {
+        stage: rerenderRequiresReview ? 'review_required' : 'done',
+        percent: 100,
+        videoUrl,
+        provider: 'stock-assembler',
+      },
       {
         captions: cues,
         rerenderCount: rerenderCount + 1,

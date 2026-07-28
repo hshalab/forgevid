@@ -150,6 +150,9 @@ export default function AIFeaturesPage() {
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>(["voiceover", "subtitles"])
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null)
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null)
+  // Set when a render finished but the automated quality gate / fact check
+  // held it for the owner's review (controlled learning system).
+  const [reviewHold, setReviewHold] = useState<{ previewUrl: string | null; issues: string[] } | null>(null)
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false)
   const [generatedScript, setGeneratedScript] = useState<string | null>(null)
 
@@ -176,6 +179,34 @@ export default function AIFeaturesPage() {
       .catch(() => {
         /* voice selection is optional; the server falls back to the default */
       })
+  }, [])
+
+  // A render held for review must survive navigation: without this, leaving
+  // the page orphaned the video in REVIEW_REQUIRED with no way back to the
+  // accept/reject card. Hydrate the newest held video on load.
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const res = await fetch('/api/videos')
+        if (!res.ok) return
+        const data = await res.json()
+        const held = (data.videos ?? []).find((v: { status: string }) => v.status === 'REVIEW_REQUIRED')
+        if (!held) return
+        const reviewRes = await fetch(`/api/videos/${held.id}/quality-review`)
+        if (!reviewRes.ok) return
+        const review = await reviewRes.json()
+        const issues = [
+          ...(Array.isArray(review.qualityGate?.issues) ? review.qualityGate.issues : []),
+          ...(Array.isArray(review.factCheck?.unsourcedNumbers) && review.factCheck.unsourcedNumbers.length
+            ? [`Narration states number(s) not in your prompt: ${review.factCheck.unsourcedNumbers.join(', ')}`]
+            : []),
+        ].map(String)
+        setCurrentVideoId(held.id)
+        setReviewHold({ previewUrl: review.previewUrl ?? null, issues })
+      } catch {
+        /* best-effort — a failed hydration just means no review card */
+      }
+    })()
   }, [])
 
   // The platform's memory of this user: open pre-set to what they actually use.
@@ -289,6 +320,7 @@ export default function AIFeaturesPage() {
     setIsGenerating(true)
     setGenerationProgress(0)
     setGeneratedVideo(null)
+    setReviewHold(null)
 
     try {
       // Kick off the job — returns immediately with a videoId to poll.
@@ -348,6 +380,21 @@ export default function AIFeaturesPage() {
           setGenerationProgress(100)
           setIsGenerating(false)
           toast.success('🎉 Video generated! Check the preview below.')
+          return
+        }
+        // Held for the owner's review by the automated quality gate / fact
+        // check — terminal for polling; the review card takes it from here.
+        if (job.status === 'REVIEW_REQUIRED' || job.requiresReview) {
+          const issues = [
+            ...(Array.isArray(job.qualityGate?.issues) ? job.qualityGate.issues : []),
+            ...(Array.isArray(job.factCheck?.unsourcedNumbers) && job.factCheck.unsourcedNumbers.length
+              ? [`Narration states number(s) not in your prompt: ${job.factCheck.unsourcedNumbers.join(', ')}`]
+              : []),
+          ].map(String)
+          setReviewHold({ previewUrl: job.reviewPreviewUrl ?? null, issues })
+          setGenerationProgress(100)
+          setIsGenerating(false)
+          toast.info('Render finished but was held for your review — see the checks below.')
           return
         }
         if (job.status === 'FAILED') {
@@ -885,6 +932,75 @@ export default function AIFeaturesPage() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Review hold — automated checks flagged the render; the owner decides. */}
+                {reviewHold && (
+                  <Card className="border-amber-500/50">
+                    <CardHeader>
+                      <CardTitle>Held for your review</CardTitle>
+                      <CardDescription>
+                        The render finished, but automated checks flagged it. Watch the
+                        preview and decide — nothing is published until you accept.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {reviewHold.previewUrl && (
+                        <video controls playsInline className="w-full rounded-lg border">
+                          <source src={reviewHold.previewUrl} type="video/mp4" />
+                        </video>
+                      )}
+                      {reviewHold.issues.length > 0 && (
+                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                          {reviewHold.issues.map((issue, i) => (
+                            <li key={i}>{issue}</li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1"
+                          onClick={async () => {
+                            if (!currentVideoId) return
+                            const res = await fetch(`/api/videos/${currentVideoId}/quality-review`, {
+                              method: 'PATCH',
+                              headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+                              body: JSON.stringify({ action: 'accept' }),
+                            })
+                            if (res.ok) {
+                              setGeneratedVideo(reviewHold.previewUrl)
+                              setReviewHold(null)
+                              toast.success('Accepted — the video is now published to your library.')
+                            } else {
+                              toast.error('Could not accept the video — try again.')
+                            }
+                          }}
+                        >
+                          Accept & publish
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={async () => {
+                            if (!currentVideoId) return
+                            const res = await fetch(`/api/videos/${currentVideoId}/quality-review`, {
+                              method: 'PATCH',
+                              headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+                              body: JSON.stringify({ action: 'reject' }),
+                            })
+                            if (res.ok) {
+                              setReviewHold(null)
+                              toast.info('Noted — the render stays unpublished. Adjust the prompt and regenerate.')
+                            } else {
+                              toast.error('Could not record the rejection — try again.')
+                            }
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Preview Panel */}
                 <Card>
