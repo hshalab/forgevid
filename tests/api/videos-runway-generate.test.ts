@@ -14,7 +14,9 @@ jest.mock('@/lib/runway-provider', () => ({
   RUNWAY_ASPECT_RATIOS: ['16:9', '9:16', '1:1'],
   MODEL_CAPABILITIES: {
     'gen4.5': { ratioByAspect: { '16:9': '1280:720', '9:16': '720:1280', '1:1': '960:960' }, durations: [5, 10] },
+    'veo3.1': { ratioByAspect: { '16:9': '1280:720', '9:16': '720:1280', '1:1': '960:960' }, durations: [4, 8] },
     seedance2: { ratioByAspect: { '16:9': '1280:720', '9:16': '720:1280', '1:1': '960:960' }, durations: [5, 10] },
+    'kling3.0_pro': { ratioByAspect: { '16:9': '1920:1080', '9:16': '1080:1920', '1:1': '1440:1440' }, durations: [5, 10] },
   },
 }))
 jest.mock('@/lib/quota', () => ({
@@ -181,24 +183,30 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     expect(response.status).toBe(503)
   })
 
-  it('returns only the verified models, each with its own durations', async () => {
+  it('returns the four verified models, each with its own durations', async () => {
     const response = await GET()
     const body = await response.json()
     expect(response.status).toBe(200)
-    // Only the two live-verified models are exposed — no gen4_turbo/gen3a_turbo
-    // (unavailable) or veo3.1/kling3.0_pro (unverified param dimensions).
-    expect(body.models.map((m: { id: string }) => m.id)).toEqual(['gen4.5', 'seedance2'])
+    // All four are live-verified end-to-end; no gen4_turbo/gen3a_turbo
+    // (not text_to_video / not provisioned).
+    expect(body.models.map((m: { id: string }) => m.id)).toEqual(['gen4.5', 'veo3.1', 'seedance2', 'kling3.0_pro'])
     expect(body.models.every((m: { label?: string }) => typeof m.label === 'string' && m.label.length > 0)).toBe(true)
-    expect(body.models.every((m: { durations?: number[] }) => Array.isArray(m.durations) && m.durations.length > 0)).toBe(true)
+    // veo3.1 carries its OWN durations (4/8), distinct from gen4.5's (5/10).
+    expect(body.models.find((m: { id: string }) => m.id === 'veo3.1').durations).toEqual([4, 8])
+    expect(body.models.find((m: { id: string }) => m.id === 'gen4.5').durations).toEqual([5, 10])
     expect(body.creditCost).toBe(2)
-    expect(body.durations).toEqual([5, 10])
     expect(body.aspectRatios).toEqual(['16:9', '9:16', '1:1'])
-    // The learning system's router ranking rides along for the picker.
     expect(body.recommendations).toEqual([])
   })
 
   it('rejects a duration the selected model does not support', async () => {
     const response = await POST(request({ promptText: 'a mountain sunrise', model: 'gen4.5', duration: 7 }))
+    expect(response.status).toBe(400)
+    expect(mockedCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects gen4.5-valid duration 5 for veo3.1 (which only accepts 4 or 8)', async () => {
+    const response = await POST(request({ promptText: 'a mountain sunrise', model: 'veo3.1', duration: 5 }))
     expect(response.status).toBe(400)
     expect(mockedCreate).not.toHaveBeenCalled()
   })

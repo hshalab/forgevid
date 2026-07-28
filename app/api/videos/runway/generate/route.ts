@@ -38,26 +38,22 @@ import { recommendFrontierModels } from '@/lib/provider-router';
  * to surface), separate from lib/runway-provider.ts's MODEL_CAPABILITIES
  * (the API facts about every model).
  *
- * ONLY models verified end-to-end on THIS account (real task → SUCCEEDED →
- * video URL, 2026-07-28) are listed. Two more are live on the account but
- * held back until their remaining unknown is verified: veo3.1 (durations
- * 4/8 confirmed, its ratio not yet) and kling3.0_pro (HD ratios confirmed,
- * its durations not yet). Their constraints already live in
- * MODEL_CAPABILITIES, so adding them here is a one-line change once a paid
- * verification run confirms the last dimension — never exposing a
- * combination the API would reject.
+ * Every model here is verified end-to-end on THIS account (real task →
+ * SUCCEEDED → video URL, 2026-07-28), each with its OWN validated ratio +
+ * duration in MODEL_CAPABILITIES — one representative per frontier provider.
  */
-const RUNWAY_VIDEO_MODELS = ['gen4.5', 'seedance2'] as const;
+const RUNWAY_VIDEO_MODELS = ['gen4.5', 'veo3.1', 'seedance2', 'kling3.0_pro'] as const;
 
 /** User-facing labels for the picker the GET handler serves. */
 const MODEL_LABELS: Record<(typeof RUNWAY_VIDEO_MODELS)[number], string> = {
   'gen4.5': "Runway Gen-4.5 — Runway's flagship",
+  'veo3.1': 'Google Veo 3.1',
   seedance2: 'ByteDance Seedance 2',
+  'kling3.0_pro': 'Kuaishou Kling 3.0 Pro',
 };
 
-// The durations the exposed models share (both accept exactly 5 and 10).
-// Sourced from MODEL_CAPABILITIES so the schema, the pre-flight, and the
-// provider can never disagree.
+// Fallback duration list (the default model's) for the pre-flight's
+// top-level field — the picker itself uses each model's own durations.
 const EXPOSED_DURATIONS = MODEL_CAPABILITIES['gen4.5'].durations;
 
 const bodySchema = z.object({
