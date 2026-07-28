@@ -278,8 +278,35 @@ async function emailSample(
     port: parseInt(process.env.SMTP_PORT || '587', 10),
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
-  const bytes = fs.statSync(filePath).size;
-  const attach = bytes <= 20 * 1024 * 1024;
+  // Full-quality 24s renders regularly exceed the 20MB attachment cap, and
+  // an email whose whole point is the clip must never arrive without it.
+  // Compress a 720p copy for the attachment (DM platforms recompress anyway)
+  // and keep the full-quality file on disk for direct sends.
+  let attachPath = filePath;
+  let bytes = fs.statSync(filePath).size;
+  const LIMIT = 20 * 1024 * 1024;
+  if (bytes > LIMIT) {
+    const compressed = filePath.replace(/\.mp4$/, '.email.mp4');
+    try {
+      const { spawnSync } = await import('child_process');
+      const ffmpeg = process.env.FFMPEG_PATH || require('ffmpeg-static') || 'ffmpeg';
+      const result = spawnSync(ffmpeg, [
+        '-y', '-i', filePath,
+        '-vf', "scale='if(gt(iw,ih),-2,720)':'if(gt(iw,ih),720,-2)'",
+        '-c:v', 'libx264', '-crf', '28', '-preset', 'fast',
+        '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart',
+        compressed,
+      ], { encoding: 'utf8' });
+      if (result.status === 0 && fs.existsSync(compressed)) {
+        attachPath = compressed;
+        bytes = fs.statSync(compressed).size;
+        console.log(`      email: compressed for attachment (${Math.round(bytes / 1024 / 1024)}MB)`);
+      }
+    } catch (error) {
+      console.warn('      email: compression failed, will fall back to path note:', error);
+    }
+  }
+  const attach = bytes <= LIMIT;
   try {
     await transporter.sendMail({
       from: process.env.SMTP_FROM || 'ForgeVid <noreply@forgevid.com>',
@@ -290,10 +317,16 @@ async function emailSample(
         (usedSiteImages
           ? 'Footage: THEIR OWN site images — lead with that in the conversation.'
           : 'Footage: stock fallback (their site blocked image downloads) — the words are still grounded in their site.') +
-        (attach ? '' : `\n\nClip too large to attach — it is at ${filePath}`),
-      attachments: attach ? [{ filename: filePath.split(/[\\/]/).pop()!, path: filePath, contentType: 'video/mp4' }] : [],
+        (attach
+          ? attachPath === filePath
+            ? ''
+            : `\n\nAttached is a 720p email copy — the full-quality file is at ${filePath}`
+          : `\n\nClip too large to attach even compressed — it is at ${filePath}`),
+      attachments: attach
+        ? [{ filename: filePath.split(/[\\/]/).pop()!, path: attachPath, contentType: 'video/mp4' }]
+        : [],
     });
-    console.log(`      email: sent to ${to}${attach ? ' (clip attached)' : ''}`);
+    console.log(`      email: sent to ${to}${attach ? ' (clip attached)' : ' (NO ATTACHMENT)'}`);
   } catch (error) {
     console.error(`      email FAILED: ${error instanceof Error ? error.message : error}`);
   }

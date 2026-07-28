@@ -81,7 +81,7 @@ function contactLine(row: { instagram: string; whatsapp: string; email: string; 
   return channels.length ? channels.join(' · ') : 'NO CONTACT CHANNEL ON FILE — enrich first';
 }
 
-function renderSample(pick: BatchPick, sourceUrl: string): { ok: boolean; detail: string } {
+function renderSample(pick: BatchPick, sourceUrl: string): { ok: boolean; detail: string; emailStatus: string } {
   // TTS is the scarce resource (ElevenLabs character quota): a
   // Spanish-FIRST account gets the Spanish clip only — it's the better
   // pitch for them anyway — and 'both' is reserved for genuinely bilingual
@@ -109,9 +109,19 @@ function renderSample(pick: BatchPick, sourceUrl: string): { ok: boolean; detail
     timeout: 15 * 60 * 1000,
   });
   const ok = result.status === 0;
-  const stdoutTail = (result.stdout ?? '').trim().split('\n').slice(-3).join(' | ');
+  const stdout = result.stdout ?? '';
+  const stdoutTail = stdout.trim().split('\n').slice(-3).join(' | ');
+  // The email confirmation is the line that matters — surface it explicitly
+  // instead of hoping it survives the tail (it didn't, on day one).
+  const emailStatus =
+    stdout
+      .split('\n')
+      .filter((line) => line.includes('email:') || line.includes('email FAILED'))
+      .map((line) => line.trim())
+      .join('; ') || 'email: NO CONFIRMATION IN OUTPUT — check manually';
   return {
     ok,
+    emailStatus,
     detail: ok
       ? stdoutTail
       : `exit ${result.status}: ${((result.stderr ?? '') + ' ' + stdoutTail).trim().slice(-300)}`,
@@ -169,7 +179,7 @@ async function main() {
     return;
   }
 
-  const results: Array<{ pick: BatchPick; ok: boolean; detail: string; freshArrival: boolean }> = [];
+  const results: Array<{ pick: BatchPick; ok: boolean; detail: string; emailStatus: string; freshArrival: boolean }> = [];
   for (const pick of batch) {
     // Automotive: feature the freshest car on their lot, not the homepage —
     // dealer inventory pages list newest-first (lib/newest-inventory.ts).
@@ -192,9 +202,10 @@ async function main() {
   const lines: string[] = [];
   lines.push(`TODAY'S SAMPLES (${okCount}/${results.length} rendered — each arrived as its own [PROSPECT] email with the clip + DM text):`);
   lines.push('');
-  for (const { pick, ok, detail, freshArrival } of results) {
+  for (const { pick, ok, detail, emailStatus, freshArrival } of results) {
     lines.push(`${ok ? '✅' : '❌'} [${pick.vertical}] ${pick.row.name} (${pick.row.language || 'EN'}) · ${pick.row.metro}`);
     lines.push(`   send via: ${contactLine(pick.row)}`);
+    lines.push('   ' + emailStatus)
     if (freshArrival) lines.push('   featuring their NEWEST arrival — mention "just saw the latest car you got in" in the DM');
     if (!ok) lines.push(`   render failed: ${detail} — run it by hand or pick the next tracker row`);
     lines.push('');
