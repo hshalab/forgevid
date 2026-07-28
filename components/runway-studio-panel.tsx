@@ -15,8 +15,8 @@ interface RunwayModel {
   label: string
   /** The exact durations (seconds) this model accepts — the picker constrains to these. */
   durations: number[]
-  /** This model's credit price — premium models cost more (real provider cost). */
-  creditCost: number
+  /** Credit price per duration (e.g. {5: 2, 10: 4}) — premium models and longer clips cost more. */
+  creditCosts: Record<number, number>
 }
 
 interface RunwayAvailability {
@@ -153,6 +153,8 @@ export function RunwayStudioPanel() {
   // dropdown from ever offering a value the API would reject.
   const selectedModel = availability.models.find((m) => m.id === model)
   const durations = selectedModel?.durations ?? availability.durations
+  // Price of the exact model+duration combination currently chosen.
+  const selectedCost = selectedModel?.creditCosts?.[duration] ?? availability.creditCost
 
   return (
     <Card>
@@ -192,7 +194,7 @@ export function RunwayStudioPanel() {
           >
             {availability.models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label} · {m.creditCost} credits
+                {m.label} · from {Math.min(...Object.values(m.creditCosts))} credits
               </option>
             ))}
           </select>
@@ -214,7 +216,7 @@ export function RunwayStudioPanel() {
           >
             {durations.map((d) => (
               <option key={d} value={d}>
-                {d}s
+                {d}s · {selectedModel?.creditCosts?.[d] ?? '?'} credit{(selectedModel?.creditCosts?.[d] ?? 2) === 1 ? '' : 's'}
               </option>
             ))}
           </select>
@@ -222,7 +224,7 @@ export function RunwayStudioPanel() {
 
         <Button onClick={generate} disabled={generating} className="w-full">
           {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-          {generating ? "Generating…" : `Generate AI video (${selectedModel?.creditCost ?? availability.creditCost} credits)`}
+          {generating ? "Generating…" : `Generate AI video (${selectedCost} credit${selectedCost === 1 ? "" : "s"})`}
         </Button>
 
         {generating && <Progress value={progress} />}

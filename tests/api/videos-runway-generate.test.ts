@@ -138,7 +138,7 @@ describe('POST /api/videos/runway/generate', () => {
       providerName: 'runway',
       prompt: 'a mountain sunrise',
     }))
-    // seedance2's measured cost (~$0.36/s) prices it at 4 credits — the
+    // seedance2 at 10s (~$3.60 measured cost) prices at 4 credits — the
     // weight passed to BOTH pools via checkGenerationQuota.
     expect(mockedCheckQuota).toHaveBeenCalledWith('user-1', 10, 4)
 
@@ -198,9 +198,14 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     // veo3.1 carries its OWN durations (4/8), distinct from gen4.5's (5/10).
     expect(body.models.find((m: { id: string }) => m.id === 'veo3.1').durations).toEqual([4, 8])
     expect(body.models.find((m: { id: string }) => m.id === 'gen4.5').durations).toEqual([5, 10])
-    // Per-model credit prices from measured provider cost: 2/3/4/5.
-    expect(body.models.map((m: { creditCost: number }) => m.creditCost)).toEqual([2, 3, 4, 5])
-    expect(body.creditCost).toBe(2)
+    // Duration-tiered credit prices from measured provider cost — a short
+    // clip pays roughly half the long clip's price, never below cost.
+    expect(body.models.find((m: { id: string }) => m.id === 'gen4.5').creditCosts).toEqual({ 5: 1, 10: 2 })
+    expect(body.models.find((m: { id: string }) => m.id === 'veo3.1').creditCosts).toEqual({ 4: 2, 8: 3 })
+    expect(body.models.find((m: { id: string }) => m.id === 'seedance2').creditCosts).toEqual({ 5: 2, 10: 4 })
+    expect(body.models.find((m: { id: string }) => m.id === 'kling3.0_pro').creditCosts).toEqual({ 5: 3, 10: 5 })
+    // Top-level: the default request's (gen4.5, 5s) price.
+    expect(body.creditCost).toBe(1)
     expect(body.aspectRatios).toEqual(['16:9', '9:16', '1:1'])
     expect(body.recommendations).toEqual([])
   })
@@ -215,5 +220,15 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     const response = await POST(request({ promptText: 'a mountain sunrise', model: 'veo3.1', duration: 5 }))
     expect(response.status).toBe(400)
     expect(mockedCreate).not.toHaveBeenCalled()
+  })
+
+  it('charges the DURATION-tiered price — a 5s kling costs 3 credits, not the 10s price of 5', async () => {
+    mockedModerate.mockResolvedValue({ allowed: true, categories: [] })
+    mockedCheckQuota.mockResolvedValue({ allowed: true, plan: 'pro', usePurchasedCredit: false })
+    mockedCreate.mockResolvedValue('task_456')
+    video.create.mockResolvedValue({ id: 'new-video-2' } as any)
+    const response = await POST(request({ promptText: 'a mountain sunrise', model: 'kling3.0_pro', duration: 5 }))
+    expect(response.status).toBe(200)
+    expect(mockedCheckQuota).toHaveBeenCalledWith('user-1', 5, 3)
   })
 })

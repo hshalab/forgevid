@@ -75,28 +75,36 @@ const bodySchema = z.object({
 });
 
 /**
- * Per-model credit prices, derived from MEASURED provider cost (real spend,
- * 2026-07-28 — rates in lib/cost-ledger.ts runwayPerSecondByModel) at each
- * model's worst-case duration, kept above cost against BOTH pools: a credit's
+ * Duration-tiered per-model credit prices, derived from MEASURED provider
+ * cost (real spend, 2026-07-28 — rates in lib/cost-ledger.ts
+ * runwayPerSecondByModel), kept above cost against BOTH pools: a credit's
  * ~$1.16-1.50 retail value AND a Pro monthly unit's ~$0.99 subscription
- * value (the weighted-quota change in lib/quota.ts makes monthly units
- * consume this same number).
+ * value (the weighted quota in lib/quota.ts consumes this same number).
  *
- *   gen4.5       max $1.20 (10s x $0.12) -> 2 credits ($1.98-3.00 revenue)
- *   veo3.1       max $2.00 ( 8s x $0.25) -> 3 credits ($2.97-4.50)
- *   seedance2    max $3.60 (10s x $0.36) -> 4 credits ($3.96-6.00)
- *   kling3.0_pro max $4.10 (10s x $0.41) -> 5 credits ($4.95-7.50)
+ *   model         5s(4s) cost -> credits | 10s(8s) cost -> credits
+ *   gen4.5        $0.60 -> 1             | $1.20 -> 2
+ *   veo3.1        $1.00 -> 2 (4s)        | $2.00 -> 3 (8s)
+ *   seedance2     $1.80 -> 2             | $3.60 -> 4
+ *   kling3.0_pro  $2.05 -> 3             | $4.10 -> 5
  *
- * The original FLAT 2 credits was priced off gen4.5's rate before the
- * others were measured — it would have lost money on every seedance/kling
- * generation.
+ * Duration tiering (2026-07-28, replacing flat worst-case per-model
+ * prices): a short clip shouldn't pay the long clip's cost — the common
+ * 5s case gets ~40% cheaper while every cell stays above measured cost.
+ * Keys are exactly the model's MODEL_CAPABILITIES.durations.
  */
-const MODEL_CREDIT_COST: Record<(typeof RUNWAY_VIDEO_MODELS)[number], number> = {
-  'gen4.5': 2,
-  'veo3.1': 3,
-  seedance2: 4,
-  'kling3.0_pro': 5,
+const MODEL_CREDIT_COST: Record<(typeof RUNWAY_VIDEO_MODELS)[number], Record<number, number>> = {
+  'gen4.5': { 5: 1, 10: 2 },
+  'veo3.1': { 4: 2, 8: 3 },
+  seedance2: { 5: 2, 10: 4 },
+  'kling3.0_pro': { 5: 3, 10: 5 },
 };
+
+/** The credits a specific request costs — duration is already schema-validated per model. */
+function creditCostFor(model: (typeof RUNWAY_VIDEO_MODELS)[number], duration: number): number {
+  const byDuration = MODEL_CREDIT_COST[model];
+  // Defensive max: an unknown duration must never under-charge.
+  return byDuration[duration] ?? Math.max(...Object.values(byDuration));
+}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -119,9 +127,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Frontier generation is the most expensive thing the platform buys —
-  // weighted at the model's own credit price against BOTH pools (monthly
-  // allowance units and purchased credits; see lib/quota.ts).
-  const creditCost = MODEL_CREDIT_COST[input.model];
+  // weighted at the model+duration's own credit price against BOTH pools
+  // (monthly allowance units and purchased credits; see lib/quota.ts).
+  const creditCost = creditCostFor(input.model, input.duration);
   const quota = await checkGenerationQuota(userId, input.duration, creditCost);
   if (!quota.allowed) {
     return NextResponse.json(
@@ -276,16 +284,16 @@ export async function GET() {
   const recommendations = await recommendFrontierModels({ priority: 'balanced' }).catch(() => []);
 
   return NextResponse.json({
-    // Each model carries its OWN valid durations AND its own credit price —
-    // the picker constrains the duration options and shows the real cost of
-    // whatever the chosen model actually is.
+    // Each model carries its OWN valid durations AND its per-duration credit
+    // prices — the picker constrains the duration options and shows the real
+    // cost of the exact model+length combination chosen.
     models: RUNWAY_VIDEO_MODELS.map((id) => ({
       id,
       label: MODEL_LABELS[id],
       durations: MODEL_CAPABILITIES[id].durations,
-      creditCost: MODEL_CREDIT_COST[id],
+      creditCosts: MODEL_CREDIT_COST[id],
     })),
-    creditCost: MODEL_CREDIT_COST['gen4.5'],
+    creditCost: creditCostFor('gen4.5', 5),
     durations: EXPOSED_DURATIONS,
     aspectRatios: RUNWAY_ASPECT_RATIOS,
     recommendations,

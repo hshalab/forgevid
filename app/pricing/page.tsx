@@ -370,8 +370,8 @@ export default function PricingPage() {
               <p className="text-gray-300">
                 Yes. A standard stock-footage video is 1 credit. Premium generation types use more,
                 reflecting their real provider cost: AI Presenter videos are 2 credits, Frontier AI
-                clips are 2–5 credits depending on the model (Runway Gen-4.5 is 2; Google Veo 3.1 is 3;
-                ByteDance Seedance 2 is 4; Kling 3.0 Pro is 5), and lip-synced video dubbing is 8.
+                clips are 1–5 credits depending on the model and clip length (a 5s Runway Gen-4.5
+                clip is 1 credit; a 10s Kling 3.0 Pro clip is 5), and lip-synced video dubbing is 8.
                 The exact price is always shown on the Generate button before you click.
               </p>
             </div>

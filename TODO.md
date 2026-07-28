@@ -1858,3 +1858,16 @@ on cheap models"). ForgeVid's subscription-plan prices themselves
 $25-120, Pictory $29-199, Synthesia $29-89, HeyGen $29-149.
 
 Gates: tsc clean, **531 tests green (76 suites, +9)**, build clean.
+
+**Refinement (same day, founder decision): duration-tiered prices.** The
+flat per-model prices were set at each model's worst-case (10s) cost, so a
+5s seedance clip ($1.80) still charged 4 credits — the one place a
+reviewer could fairly call it overpriced vs the $0.60-2.00/clip market
+band. Prices now tier by model AND duration (gen4.5 1/2, veo3.1 2/3,
+seedance2 2/4, kling3.0_pro 3/5 credits for short/long), common case ~40%
+cheaper, every cell still above measured cost against the weakest revenue
+unit. Rationale kept on record: a solo founder should NOT race funded
+clip-vendors to wholesale — premium-priced workflow product, fewer
+customers, higher margin is the sustainable solo shape; duration tiering
+removes the indefensible cell without surrendering that position. 532
+tests green.
