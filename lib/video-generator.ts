@@ -47,6 +47,7 @@ import { parseDurationSeconds, resolveFfmpegPath, supportsFilter } from './ffmpe
 import { buildKenBurnsFilter, directionForScene } from './ken-burns';
 import type { UserMediaItem } from './user-media';
 import { withProviderReliability } from './provider-reliability';
+import { proofreadLines } from './proofread';
 import { buildSceneQueries } from './stock-query';
 import { buildLowerThirdFilter, type LowerThird } from './lower-third';
 import {
@@ -1700,6 +1701,19 @@ export async function generateVideoWithScenes(
   if (options.ctaNarration && planned.length > 0) {
     const last = planned.length - 1;
     planned[last] = { ...planned[last], narration: options.ctaNarration };
+  }
+
+  // Orthography pass BEFORE TTS/captions — a misspelled word must never be
+  // spoken or burned in. Runs on the final narration (after hook/CTA
+  // overrides) at temperature 0, numbers-guarded, fail-open; Spanish is the
+  // priority case (accents), but every language goes through. This is the
+  // one choke point every generation path shares (see lib/proofread.ts).
+  {
+    const narrationLines = planned.map((scene) => spokenLine(scene));
+    const proofread = await proofreadLines(narrationLines, options.language ?? 'en');
+    planned = planned.map((scene, i) =>
+      proofread[i] !== narrationLines[i] ? { ...scene, narration: proofread[i] } : scene,
+    );
   }
 
   if (options.mediaOnly) {

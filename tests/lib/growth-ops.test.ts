@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals'
-import { followUpsDue, parseTracker, pickDailyBatch, type TrackerRow } from '@/lib/growth-ops'
+import { followUpsDue, isBayAreaMetro, parseTracker, pickDailyBatch, splitByMetro, type TrackerRow } from '@/lib/growth-ops'
 
 const HEADER =
   'status,name,website,city,metro,phone,inventory_estimate,contact_name,contact_role,linkedin,email,instagram,whatsapp,language,sample_sent,sample_date,response,meeting,pilot,revenue,testimonial_permission,notes'
@@ -129,5 +129,29 @@ describe('followUpsDue', () => {
       realestate: [], ecom: [],
     }, today)
     expect(due).toHaveLength(0)
+  })
+})
+
+describe('isBayAreaMetro / splitByMetro', () => {
+  it('matches every metro spelling the trackers actually use', () => {
+    expect(isBayAreaMetro('Bay Area')).toBe(true)
+    expect(isBayAreaMetro('San Francisco Bay Area CA')).toBe(true)
+    expect(isBayAreaMetro('San Jose')).toBe(true)
+    expect(isBayAreaMetro('Hayward')).toBe(true)
+    expect(isBayAreaMetro('Miami')).toBe(false)
+    expect(isBayAreaMetro('Los Angeles')).toBe(false)
+    expect(isBayAreaMetro('')).toBe(false)
+  })
+
+  it('splits trackers into bay and rest without losing rows', () => {
+    const { bay, rest } = splitByMetro({
+      auto: [row({ name: 'SJ', metro: 'San Jose' } as any), row({ name: 'MIA', metro: 'Miami' } as any)],
+      realestate: [row({ name: 'SFR', metro: 'San Francisco Bay Area CA' } as any)],
+      ecom: [],
+    })
+    expect(bay.auto.map((r) => r.name)).toEqual(['SJ'])
+    expect(rest.auto.map((r) => r.name)).toEqual(['MIA'])
+    expect(bay.realestate.map((r) => r.name)).toEqual(['SFR'])
+    expect(rest.realestate).toEqual([])
   })
 })

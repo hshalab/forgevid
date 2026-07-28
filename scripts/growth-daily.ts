@@ -27,9 +27,11 @@ import {
   followUpsDue,
   parseTracker,
   pickDailyBatch,
+  splitByMetro,
   type BatchPick,
   type Vertical,
 } from '../lib/growth-ops';
+import { newestArrivalUrl } from '../lib/newest-inventory';
 
 const TRACKER_FILES: Record<Vertical, string> = {
   auto: 'dealers.csv',
@@ -45,7 +47,18 @@ function parseArgs() {
   };
   return {
     dryRun: args.includes('--dry-run'),
-    count: Number(get('--count')) || 10,
+    // 20/day: 10 Bay Area (the operator's home turf — walk-in ready) + 10
+    // from the rest of the trackers (Miami-first remote outbound).
+    count: Number(get('--count')) || 20,
+  };
+}
+
+function scaledMix(count: number): Record<Vertical, number> {
+  const scale = count / 10;
+  return {
+    auto: Math.max(1, Math.round(6 * scale)),
+    realestate: Math.max(1, Math.round(2 * scale)),
+    ecom: Math.max(1, Math.round(2 * scale)),
   };
 }
 
@@ -68,26 +81,36 @@ function contactLine(row: { instagram: string; whatsapp: string; email: string; 
   return channels.length ? channels.join(' · ') : 'NO CONTACT CHANNEL ON FILE — enrich first';
 }
 
-function renderSample(pick: BatchPick): { ok: boolean; detail: string } {
+function renderSample(pick: BatchPick, sourceUrl: string): { ok: boolean; detail: string } {
   const lang = pick.row.language.toLowerCase() === 'en' ? 'en' : 'both';
   const args = [
     'tsx',
     'scripts/prospect-sample.ts',
-    pick.row.website,
+    sourceUrl,
     '--vertical', pick.vertical,
     '--dealer', pick.row.name,
     '--lang', lang,
     '--email', process.env.MARKETING_EMAIL ?? '',
   ];
-  const result = spawnSync('npx', args, {
+  // shell:true (needed for npx on Windows) joins args WITHOUT quoting —
+  // an unquoted multi-word dealer name gets split into separate tokens,
+  // and the tracker then matches on a partial name. Quote anything with
+  // whitespace.
+  const quoted = args.map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg));
+  const result = spawnSync('npx', quoted, {
     cwd: process.cwd(),
     shell: true,
     encoding: 'utf8',
     timeout: 15 * 60 * 1000,
   });
   const ok = result.status === 0;
-  const tail = (result.stdout ?? '').trim().split('\n').slice(-3).join(' | ');
-  return { ok, detail: ok ? tail : `exit ${result.status}: ${(result.stderr ?? '').slice(-300)}` };
+  const stdoutTail = (result.stdout ?? '').trim().split('\n').slice(-3).join(' | ');
+  return {
+    ok,
+    detail: ok
+      ? stdoutTail
+      : `exit ${result.status}: ${((result.stderr ?? '') + ' ' + stdoutTail).trim().slice(-300)}`,
+  };
 }
 
 async function sendDigest(subject: string, body: string) {
@@ -119,14 +142,14 @@ async function main() {
   const opts = parseArgs();
   const trackers = loadTrackers();
 
-  // Scale the default 6/2/2 mix to the requested count.
-  const scale = opts.count / 10;
-  const mix = {
-    auto: Math.max(1, Math.round(6 * scale)),
-    realestate: Math.max(1, Math.round(2 * scale)),
-    ecom: Math.max(1, Math.round(2 * scale)),
-  };
-  const batch = pickDailyBatch(trackers, mix);
+  // Half the quota from the Bay Area (home turf), half from everywhere
+  // else (Miami-first). If the Bay Area pool runs short, the remainder
+  // backfills from the rest — the daily total is the commitment.
+  const half = Math.ceil(opts.count / 2);
+  const { bay, rest } = splitByMetro(trackers);
+  const bayBatch = pickDailyBatch(bay, scaledMix(half));
+  const restBatch = pickDailyBatch(rest, scaledMix(opts.count - bayBatch.length));
+  const batch = [...bayBatch, ...restBatch];
   const due = followUpsDue(trackers, new Date());
 
   console.log(`[growth-daily] batch: ${batch.length} samples · follow-ups due: ${due.length}`);
@@ -141,11 +164,22 @@ async function main() {
     return;
   }
 
-  const results: Array<{ pick: BatchPick; ok: boolean; detail: string }> = [];
+  const results: Array<{ pick: BatchPick; ok: boolean; detail: string; freshArrival: boolean }> = [];
   for (const pick of batch) {
+    // Automotive: feature the freshest car on their lot, not the homepage —
+    // dealer inventory pages list newest-first (lib/newest-inventory.ts).
+    // Best-effort: any miss falls back to the tracker's site URL.
+    let sourceUrl = pick.row.website;
+    let freshArrival = false;
+    if (pick.vertical === 'auto') {
+      const newest = await newestArrivalUrl(pick.row.website);
+      sourceUrl = newest.url;
+      freshArrival = newest.isVehiclePage;
+      if (freshArrival) console.log(`  newest arrival: ${sourceUrl}`);
+    }
     console.log(`[growth-daily] rendering ${pick.row.name}…`);
-    const result = renderSample(pick);
-    results.push({ pick, ...result });
+    const result = renderSample(pick, sourceUrl);
+    results.push({ pick, ...result, freshArrival });
     console.log(`  ${result.ok ? 'OK' : 'FAILED'} — ${result.detail}`);
   }
 
@@ -153,9 +187,10 @@ async function main() {
   const lines: string[] = [];
   lines.push(`TODAY'S SAMPLES (${okCount}/${results.length} rendered — each arrived as its own [PROSPECT] email with the clip + DM text):`);
   lines.push('');
-  for (const { pick, ok, detail } of results) {
-    lines.push(`${ok ? '✅' : '❌'} [${pick.vertical}] ${pick.row.name} (${pick.row.language || 'EN'})`);
+  for (const { pick, ok, detail, freshArrival } of results) {
+    lines.push(`${ok ? '✅' : '❌'} [${pick.vertical}] ${pick.row.name} (${pick.row.language || 'EN'}) · ${pick.row.metro}`);
     lines.push(`   send via: ${contactLine(pick.row)}`);
+    if (freshArrival) lines.push('   featuring their NEWEST arrival — mention "just saw the latest car you got in" in the DM');
     if (!ok) lines.push(`   render failed: ${detail} — run it by hand or pick the next tracker row`);
     lines.push('');
   }

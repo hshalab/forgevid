@@ -125,6 +125,38 @@ export function pickDailyBatch(
   return picks;
 }
 
+/**
+ * Bay Area detection across the trackers' inconsistent metro values
+ * ("Bay Area", "San Francisco Bay Area CA", city names). Substring match,
+ * lowercase — a new tracker source shouldn't silently fall out of the
+ * operator's home-turf half of the daily batch.
+ */
+const BAY_AREA_MARKERS = [
+  'bay area', 'san jose', 'san francisco', 'oakland', 'hayward', 'fremont',
+  'richmond', 'concord', 'redwood city', 'santa clara', 'union city',
+  'daly city', 'san pablo', 'east bay', 'peninsula',
+];
+
+export function isBayAreaMetro(metro: string): boolean {
+  const value = metro.toLowerCase();
+  return BAY_AREA_MARKERS.some((marker) => value.includes(marker));
+}
+
+/** Split every tracker's rows into Bay Area vs everywhere else. */
+export function splitByMetro(trackers: Record<Vertical, TrackerRow[]>): {
+  bay: Record<Vertical, TrackerRow[]>;
+  rest: Record<Vertical, TrackerRow[]>;
+} {
+  const bay = { auto: [], realestate: [], ecom: [] } as Record<Vertical, TrackerRow[]>;
+  const rest = { auto: [], realestate: [], ecom: [] } as Record<Vertical, TrackerRow[]>;
+  (Object.keys(trackers) as Vertical[]).forEach((vertical) => {
+    for (const row of trackers[vertical] ?? []) {
+      (isBayAreaMetro(row.metro) ? bay : rest)[vertical].push(row);
+    }
+  });
+  return { bay, rest };
+}
+
 export type FollowUpStage = 'D+2' | 'D+5' | 'D+10';
 
 export interface FollowUpDue {
