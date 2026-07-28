@@ -5,9 +5,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Play, Download, Share2, Trash2, Plus, Search, Clock, Eye, Calendar, Loader2 } from "lucide-react"
+import { Play, Download, Share2, Trash2, Plus, Search, Clock, Eye, Calendar, Loader2, Globe } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { VideoPlayerModal } from "@/components/video-player-modal"
+import { withCsrfHeaders } from "@/lib/csrf-client"
 
 interface VideoRow {
   id: string
@@ -135,6 +136,37 @@ export default function VideosPage() {
       alert("Video link copied to clipboard!")
     } catch {
       alert(u)
+    }
+  }
+
+  // HeyGen dubbing (voice-clone + lip-sync) — the same feature the dub API
+  // has offered since it shipped, finally reachable from the library.
+  const DUB_LANGUAGES = ["Spanish", "Portuguese", "French", "German", "Italian", "Japanese", "Korean", "Mandarin"]
+  const dubVideo = async (v: VideoRow) => {
+    const language = window.prompt(
+      `Dub "${v.title}" into another language (voice-cloned + lip-synced via HeyGen; uses purchased credits).\n\nType one of: ${DUB_LANGUAGES.join(", ")}`,
+    )
+    if (!language) return
+    const normalized = DUB_LANGUAGES.find((l) => l.toLowerCase() === language.trim().toLowerCase())
+    if (!normalized) {
+      alert(`Unsupported language. Choose one of: ${DUB_LANGUAGES.join(", ")}`)
+      return
+    }
+    try {
+      const res = await fetch(`/api/videos/${v.id}/dub`, {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ targetLanguage: normalized }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || "Dubbing failed to start.")
+        return
+      }
+      alert(`Dubbing into ${normalized} started — the new video will appear in this library when it finishes (typically a few minutes).`)
+      void loadVideos()
+    } catch {
+      alert("Network error while starting the dub.")
     }
   }
 
@@ -316,6 +348,7 @@ export default function VideosPage() {
                         <div className="flex items-center gap-1 ml-2">
                           <Button variant="ghost" size="sm" disabled={!url} onClick={() => shareVideo(video)}><Share2 className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="sm" disabled={!url} onClick={() => downloadVideo(video)}><Download className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" disabled={!url || video.status !== "COMPLETED"} onClick={() => dubVideo(video)} title="Dub into another language (HeyGen voice-clone + lip-sync)"><Globe className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="sm" onClick={() => deleteVideo(video)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </div>

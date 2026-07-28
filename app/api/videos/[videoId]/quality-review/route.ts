@@ -26,6 +26,8 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ vide
     thumbnail: video.thumbnail,
     qualityGate: metadata.qualityGate ?? null,
     factCheck: metadata.factCheck ?? null,
+    visualReview: metadata.visualReview ?? null,
+    reviewHold: metadata.reviewHold ?? null,
   });
 }
 

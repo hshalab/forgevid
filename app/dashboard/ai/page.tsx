@@ -139,6 +139,8 @@ export default function AIFeaturesPage() {
   const [activeTab, setActiveTab] = useState<string>("chat")
   const [captionPreset, setCaptionPreset] = useState<string>("default")
   const [forgeVidEndCard, setForgeVidEndCard] = useState(false)
+  // Best-of-3 storyboards: plan 3 candidates, auto-score, render the winner.
+  const [bestOfStoryboards, setBestOfStoryboards] = useState(false)
   const [pipAssetId, setPipAssetId] = useState<string | null>(null)
   const [pipName, setPipName] = useState<string>("")
   const [uploadingPip, setUploadingPip] = useState(false)
@@ -153,6 +155,27 @@ export default function AIFeaturesPage() {
   // Set when a render finished but the automated quality gate / fact check
   // held it for the owner's review (controlled learning system).
   const [reviewHold, setReviewHold] = useState<{ previewUrl: string | null; issues: string[] } | null>(null)
+
+  // One place that turns a jobs/quality-review payload into the human-readable
+  // issue list the review card shows — quality gate, fact check, the AI visual
+  // reviewer, an explicit hold reason (e.g. translation review), and any
+  // back-translation lines that drifted.
+  const reviewIssuesFrom = (source: any): string[] => {
+    const holdDetails = source.reviewHold?.details
+    return [
+      ...(Array.isArray(source.qualityGate?.issues) ? source.qualityGate.issues : []),
+      ...(Array.isArray(source.factCheck?.unsourcedNumbers) && source.factCheck.unsourcedNumbers.length
+        ? [`Narration states number(s) not in your prompt: ${source.factCheck.unsourcedNumbers.join(', ')}`]
+        : []),
+      ...(Array.isArray(source.visualReview?.issues) ? source.visualReview.issues : []),
+      ...(source.reviewHold?.reason ? [source.reviewHold.reason] : []),
+      ...(Array.isArray(holdDetails?.lines)
+        ? holdDetails.lines
+            .filter((line: any) => line?.flagged)
+            .map((line: any) => `Possible translation drift: "${line.original}" round-tripped as "${line.backTranslated}"`)
+        : []),
+    ].map(String)
+  }
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false)
   const [generatedScript, setGeneratedScript] = useState<string | null>(null)
 
@@ -195,14 +218,8 @@ export default function AIFeaturesPage() {
         const reviewRes = await fetch(`/api/videos/${held.id}/quality-review`)
         if (!reviewRes.ok) return
         const review = await reviewRes.json()
-        const issues = [
-          ...(Array.isArray(review.qualityGate?.issues) ? review.qualityGate.issues : []),
-          ...(Array.isArray(review.factCheck?.unsourcedNumbers) && review.factCheck.unsourcedNumbers.length
-            ? [`Narration states number(s) not in your prompt: ${review.factCheck.unsourcedNumbers.join(', ')}`]
-            : []),
-        ].map(String)
         setCurrentVideoId(held.id)
-        setReviewHold({ previewUrl: review.previewUrl ?? null, issues })
+        setReviewHold({ previewUrl: review.previewUrl ?? null, issues: reviewIssuesFrom(review) })
       } catch {
         /* best-effort — a failed hydration just means no review card */
       }
@@ -345,6 +362,7 @@ export default function AIFeaturesPage() {
           ...(pipAssetId ? { pip: { assetId: pipAssetId, position: pipPosition } } : {}),
           renderQuality: quality,
           forgeVidEndCard,
+          ...(bestOfStoryboards ? { planCandidates: 3 } : {}),
           transition:
             transitionType === "none" ? null : { type: transitionType, duration: 0.5 },
         }),
@@ -385,13 +403,7 @@ export default function AIFeaturesPage() {
         // Held for the owner's review by the automated quality gate / fact
         // check — terminal for polling; the review card takes it from here.
         if (job.status === 'REVIEW_REQUIRED' || job.requiresReview) {
-          const issues = [
-            ...(Array.isArray(job.qualityGate?.issues) ? job.qualityGate.issues : []),
-            ...(Array.isArray(job.factCheck?.unsourcedNumbers) && job.factCheck.unsourcedNumbers.length
-              ? [`Narration states number(s) not in your prompt: ${job.factCheck.unsourcedNumbers.join(', ')}`]
-              : []),
-          ].map(String)
-          setReviewHold({ previewUrl: job.reviewPreviewUrl ?? null, issues })
+          setReviewHold({ previewUrl: job.reviewPreviewUrl ?? null, issues: reviewIssuesFrom(job) })
           setGenerationProgress(100)
           setIsGenerating(false)
           toast.info('Render finished but was held for your review — see the checks below.')
@@ -674,6 +686,14 @@ export default function AIFeaturesPage() {
                       <div>
                         <label htmlFor="forgevid-end-card" className="text-sm font-medium cursor-pointer">Add “Created with ForgeVid” end card</label>
                         <p className="text-xs text-muted-foreground">Optional two-second bookend. Free-plan watermark rules remain unchanged.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 rounded-md border border-gray-700 p-3">
+                      <Checkbox id="best-of-storyboards" checked={bestOfStoryboards} onCheckedChange={(checked) => setBestOfStoryboards(Boolean(checked))} />
+                      <div>
+                        <label htmlFor="best-of-storyboards" className="text-sm font-medium cursor-pointer">Best-of-3 storyboards</label>
+                        <p className="text-xs text-muted-foreground">Plans three candidate storyboards, auto-scores them, and renders only the winner. Slightly slower to start; same render cost.</p>
                       </div>
                     </div>
 

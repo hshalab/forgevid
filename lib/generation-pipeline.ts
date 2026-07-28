@@ -32,6 +32,8 @@ import { checkNarrationFacts } from './fact-check';
 import { recordProviderObservation, upsertGenerationEvaluation } from './learning-system';
 import { allowsProductImprovement } from './learning-consent';
 import { resolveOptimization } from './optimization-registry';
+import { planSceneCandidates } from './plan-candidates';
+import { reviewSceneFrames } from './visual-review';
 
 /**
  * "Your video is ready" — the come-back-to-a-finished-video loop. Best-effort:
@@ -229,6 +231,19 @@ export interface GenerationInput {
   /** Override the closing line (the CTA). */
   ctaNarration?: string;
   enableEmotionAware?: boolean;
+  /**
+   * Best-of-N storyboards (2-3): plan N candidates, auto-score them
+   * deterministically (lib/plan-candidates.ts), render only the winner.
+   * Costs N x planning tokens, zero extra render cost. Ignored when
+   * presetScenes is set (variations/localizations must share one body).
+   */
+  planCandidates?: number;
+  /**
+   * Hold the finished render for the owner's review regardless of the
+   * quality gate — e.g. a localization whose profile requires human review
+   * of machine translations. `details` surfaces on the review card.
+   */
+  reviewHold?: { reason: string; details?: unknown } | null;
 }
 
 export type GenerationStage =
@@ -395,6 +410,29 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
     // Their own music track beats the (possibly empty) bundled library.
     const musicOverride = await audioAssetForVideo(videoId, input.musicAssetId);
     const renderStartedAt = Date.now();
+
+    // Best-of-N storyboards: plan candidates, score deterministically,
+    // render only the winner (lib/plan-candidates.ts). Never for preset
+    // scenes — variations/localizations must share one body. Fails soft to
+    // single-plan behavior; the render must not die because best-of-3 did.
+    let presetScenes = input.presetScenes;
+    let planCandidatesSummary: import('./plan-candidates').PlanCandidatesResult['summary'] | null = null;
+    if (!presetScenes && (input.planCandidates ?? 1) > 1) {
+      try {
+        const result = await planSceneCandidates(
+          script,
+          input.duration,
+          input.language ?? 'en',
+          input.planCandidates!,
+          input.prompt,
+        );
+        presetScenes = result.winner;
+        planCandidatesSummary = result.summary;
+      } catch (error) {
+        console.warn('[Pipeline] candidate planning failed (falling back to single plan):', error);
+      }
+    }
+
     const { videoUrl, scenes, cues, thumbnailUrl, quality } = await generateVideoWithScenes({
       prompt: script,
       style: input.style,
@@ -419,7 +457,7 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
           : null;
       })(),
       lowerThird: input.lowerThird ?? null,
-      presetScenes: input.presetScenes,
+      presetScenes,
       hookNarration: input.hookNarration,
       hookSearchQuery: input.hookSearchQuery,
       ctaNarration: input.ctaNarration,
@@ -432,7 +470,15 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
     await setStage(videoId, 'uploading');
 
     const factCheck = checkNarrationFacts(scenes.map((s) => spokenLine(s)), input.prompt);
-    const requiresReview = !quality.passed || factCheck.flagged;
+    // The AI visual reviewer (Gemini vision over sampled frames) — advisory
+    // scores recorded always; only a CRITICAL verdict joins the review hold.
+    // Fails soft: no key / no thumbnails / API error → null, never blocks.
+    const visualReview = await reviewSceneFrames(scenes, {
+      prompt: input.prompt,
+      vertical: input.style,
+    }).catch(() => null);
+    const requiresReview =
+      !quality.passed || factCheck.flagged || Boolean(input.reviewHold) || Boolean(visualReview?.critical);
     const { width, height } = renderDims(aspectRatio, input.renderQuality ?? 'full');
     await prisma.video.update({
       where: { id: videoId },
@@ -461,7 +507,16 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
       },
       // captions are persisted so they can be downloaded as SRT/VTT; the
       // quality report surfaces in the editor/admin when a render was flagged.
-      { script, scenes, captions: cues, qualityGate: quality, factCheck },
+      {
+        script,
+        scenes,
+        captions: cues,
+        qualityGate: quality,
+        factCheck,
+        ...(visualReview ? { visualReview } : {}),
+        ...(input.reviewHold ? { reviewHold: input.reviewHold } : {}),
+        ...(planCandidatesSummary ? { planCandidates: planCandidatesSummary } : {}),
+      },
     );
 
     // Consent-gated: an opted-out user's renders leave no learning records
@@ -481,16 +536,29 @@ export async function runGeneration(videoId: string, input: GenerationInput): Pr
           videoId,
           provider: 'stock-assembler',
           model: 'scene-assembler',
-          promptVersion: promptArtifact ? `v${promptArtifact.version}` : 'v1',
+          // 'unversioned' (not 'v1') when no artifact resolved, so a real
+          // v1 artifact's evaluations never mix with pre-registry renders.
+          promptVersion: promptArtifact ? `v${promptArtifact.version}` : 'unversioned',
           language: input.language,
           latencyMs,
           qualityScore,
           qualityPassed: quality.passed,
           factualPassed: !factCheck.flagged,
           failureReason: requiresReview
-            ? [...(quality.issues ?? []), ...(factCheck.flagged ? ['Unverified narration facts'] : [])].join('; ')
+            ? [
+                ...(quality.issues ?? []),
+                ...(factCheck.flagged ? ['Unverified narration facts'] : []),
+                ...(visualReview?.critical ? ['Visual review flagged critical issues'] : []),
+                ...(input.reviewHold ? [input.reviewHold.reason] : []),
+              ].join('; ')
             : null,
-          metrics: { qualityGate: quality, factCheck },
+          candidateGroupId: planCandidatesSummary ? videoId : null,
+          metrics: {
+            qualityGate: quality,
+            factCheck,
+            ...(visualReview ? { visualReview } : {}),
+            ...(planCandidatesSummary ? { planCandidates: planCandidatesSummary } : {}),
+          },
         }),
         recordProviderObservation({
           userId: owner.userId,

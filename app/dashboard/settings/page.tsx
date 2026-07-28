@@ -22,7 +22,7 @@ import {
   Save
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { withCsrfHeaders } from "@/lib/csrf-client"
 
 const PLAN_LABELS: Record<string, string> = {
@@ -64,6 +64,10 @@ export default function SettingsPage() {
   const [realPlan, setRealPlan] = useState<string>("free")
   const [saving, setSaving] = useState<string | null>(null)
   const [saveMsg, setSaveMsg] = useState<string>("")
+  // The controlled learning system's product-improvement consent — real,
+  // server-backed state (default included; see lib/learning-consent.ts).
+  const [learningConsent, setLearningConsent] = useState(true)
+  const [learningConsentSaving, setLearningConsentSaving] = useState(false)
 
   // Load the real profile (name/email/bio) and the real plan once on mount.
   useEffect(() => {
@@ -92,6 +96,13 @@ export default function SettingsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.subscription?.planId) setRealPlan(data.subscription.planId)
+      })
+      .catch(() => {})
+
+    fetch("/api/user/learning-consent")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (typeof data?.granted === "boolean") setLearningConsent(data.granted)
       })
       .catch(() => {})
   }, [])
@@ -127,8 +138,49 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDeleteAccount = () => {
-    // TODO: Implement account deletion flow
+  const handleExportData = async () => {
+    try {
+      const res = await fetch("/api/user/export")
+      if (!res.ok) {
+        setSaveMsg("Export failed. Please try again.")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `forgevid-export-${new Date().toISOString().slice(0, 10)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setSaveMsg("Export failed. Please try again.")
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    const typed = window.prompt(
+      'This permanently deletes your account: your login stops working, your cloned voices are ' +
+        'deleted at the provider, and your data is scrubbed. Payment records are retained as ' +
+        'required for financial records. Type DELETE MY ACCOUNT to confirm.',
+    )
+    if (typed !== "DELETE MY ACCOUNT") return
+    try {
+      const res = await fetch("/api/user/account", {
+        method: "DELETE",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ confirm: "DELETE MY ACCOUNT" }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSaveMsg(data?.error || "Account deletion failed.")
+        return
+      }
+      // Clear the NextAuth cookie too — the server refuses DELETED users on
+      // every request regardless, but leaving the cookie is sloppy.
+      await signOut({ callbackUrl: "/" })
+    } catch {
+      setSaveMsg("Network error. Please try again.")
+    }
   }
 
   return (
@@ -478,17 +530,33 @@ export default function SettingsPage() {
 
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label>Analytics Tracking</Label>
+                        <Label>Help improve ForgeVid</Label>
                         <p className="text-sm text-muted-foreground">
-                          Help us improve ForgeVid with usage analytics
+                          Allow your render quality metrics to improve model
+                          routing for everyone. Opting out stops new recording
+                          and excludes your past data. Saves immediately.
                         </p>
                       </div>
                       <Switch
-                        checked={settings.privacy.analyticsTracking}
-                        onCheckedChange={(checked) => setSettings({
-                          ...settings,
-                          privacy: { ...settings.privacy, analyticsTracking: checked }
-                        })}
+                        checked={learningConsent}
+                        disabled={learningConsentSaving}
+                        onCheckedChange={async (checked) => {
+                          setLearningConsentSaving(true)
+                          const previous = learningConsent
+                          setLearningConsent(checked)
+                          try {
+                            const res = await fetch("/api/user/learning-consent", {
+                              method: "PUT",
+                              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                              body: JSON.stringify({ granted: checked }),
+                            })
+                            if (!res.ok) setLearningConsent(previous)
+                          } catch {
+                            setLearningConsent(previous)
+                          } finally {
+                            setLearningConsentSaving(false)
+                          }
+                        }}
                       />
                     </div>
 
@@ -512,7 +580,7 @@ export default function SettingsPage() {
                   <div className="border-t pt-6">
                     <h3 className="font-semibold mb-4">Account Actions</h3>
                     <div className="space-y-3">
-                      <Button variant="outline" className="w-full justify-start">
+                      <Button variant="outline" className="w-full justify-start" onClick={handleExportData}>
                         <Download className="h-4 w-4 mr-2" />
                         Export My Data
                       </Button>

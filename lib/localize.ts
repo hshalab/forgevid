@@ -155,6 +155,98 @@ export async function translateNarrationLines(
  * duration, visual elements — carried over unchanged from the source video's
  * persisted scenes, so the new render shares the same visual body and pacing.
  */
+export interface BackTranslationLine {
+  index: number;
+  original: string;
+  backTranslated: string;
+  /** Word-overlap similarity 0-1 between the original and the round trip. */
+  similarity: number;
+  flagged: boolean;
+}
+
+export interface BackTranslationReport {
+  lines: BackTranslationLine[];
+  flaggedCount: number;
+}
+
+function wordSet(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((word) => word.length > 2),
+  );
+}
+
+/** Jaccard similarity over content words — deterministic, explainable. */
+export function lineSimilarity(a: string, b: string): number {
+  const setA = wordSet(a);
+  const setB = wordSet(b);
+  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let overlap = 0;
+  setA.forEach((word) => {
+    if (setB.has(word)) overlap += 1;
+  });
+  return overlap / (setA.size + setB.size - overlap);
+}
+
+/**
+ * Back-translation verification: translate the TRANSLATED lines back to
+ * English and compare each round trip against its original with a
+ * deterministic word-overlap score. A low-similarity line means the
+ * translation may have drifted in meaning — surfaced to the human
+ * reviewer, never auto-corrected. Fail-open: any LLM failure returns null
+ * (the review still happens; it just lacks this report).
+ */
+export async function backTranslationReport(
+  originalLines: string[],
+  translatedLines: string[],
+  targetLanguage: NarrationLanguage,
+): Promise<BackTranslationReport | null> {
+  if (!hasLlmKey() || originalLines.length === 0) return null;
+  if (originalLines.length !== translatedLines.length) return null;
+  try {
+    const numbered = translatedLines.map((line, i) => `${i + 1}. ${line}`).join('\n');
+    const response = await llm.chat.completions.create({
+      model: llmModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            `Translate these ${NARRATION_LANGUAGE_NAMES[targetLanguage]} lines into English, literally and faithfully. ` +
+            `Reply with ONLY the translated lines, one per line, in the SAME numbered order.`,
+        },
+        { role: 'user', content: numbered },
+      ],
+      max_tokens: 2048,
+      temperature: 0,
+    });
+    const raw = response.choices[0]?.message?.content?.trim() ?? '';
+    const backLines = raw
+      .split('\n')
+      .map((line) => line.replace(/^\s*\d+[.)]\s*/, '').trim())
+      .filter(Boolean);
+    if (backLines.length !== originalLines.length) return null;
+
+    const lines = originalLines.map((original, index) => {
+      const similarity = lineSimilarity(original, backLines[index]);
+      return {
+        index,
+        original,
+        backTranslated: backLines[index],
+        similarity: Number(similarity.toFixed(2)),
+        flagged: similarity < 0.3,
+      };
+    });
+    return { lines, flaggedCount: lines.filter((line) => line.flagged).length };
+  } catch (error) {
+    console.warn('[Localize] back-translation failed (review proceeds without it):', error);
+    return null;
+  }
+}
+
 export async function localizedPresetScenes(
   scenes: ResolvedScene[],
   targetLanguage: NarrationLanguage,

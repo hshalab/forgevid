@@ -61,6 +61,8 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ videoId:
     // quality-review route reads them from.
     qualityGate: requiresReview ? meta.qualityGate ?? null : undefined,
     factCheck: requiresReview ? meta.factCheck ?? null : undefined,
+    visualReview: requiresReview ? meta.visualReview ?? null : undefined,
+    reviewHold: requiresReview ? meta.reviewHold ?? null : undefined,
     thumbnail: video.thumbnail ?? null,
     error: video.status === 'FAILED' ? generation?.error ?? 'Generation failed' : null,
   });

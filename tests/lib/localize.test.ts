@@ -12,7 +12,7 @@ jest.mock('@/lib/localization-memory', () => ({
 
 import { llm, hasLlmKey } from '@/lib/ai/llm'
 import { approvedTranslation, getLocalizationProfile } from '@/lib/localization-memory'
-import { translateNarrationLines, localizedPresetScenes } from '@/lib/localize'
+import { translateNarrationLines, localizedPresetScenes, lineSimilarity, backTranslationReport } from '@/lib/localize'
 import type { ResolvedScene } from '@/lib/video-generator'
 
 const mockCreate = llm.chat.completions.create as jest.Mock
@@ -124,6 +124,47 @@ describe('translateNarrationLines', () => {
     await translateNarrationLines(['Hello world'], 'es')
     expect(mockApproved).not.toHaveBeenCalled()
     expect(mockProfile).not.toHaveBeenCalled()
+  })
+})
+
+describe('lineSimilarity', () => {
+  it('is 1 for identical content words and low for disjoint text', () => {
+    expect(lineSimilarity('The red car drives fast', 'the red car drives fast')).toBe(1)
+    expect(lineSimilarity('The red car drives fast', 'purple elephants swim slowly')).toBe(0)
+  })
+
+  it('ignores punctuation and short stopwords', () => {
+    expect(lineSimilarity('Priced at $28,900, call today!', 'priced at $28,900 — call today')).toBeGreaterThan(0.5)
+  })
+})
+
+describe('backTranslationReport', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockHasLlmKey.mockReturnValue(true)
+  })
+
+  it('flags a line whose round trip drifted from the original meaning', async () => {
+    mockCreate.mockResolvedValue(completion('1. The blue truck parks slowly\n2. Visit our showroom today'))
+    const report = await backTranslationReport(
+      ['This red sportscar accelerates instantly', 'Visit our showroom today'],
+      ['linea uno', 'linea dos'],
+      'es',
+    )
+    expect(report).not.toBeNull()
+    expect(report!.lines[0].flagged).toBe(true)
+    expect(report!.lines[1].flagged).toBe(false)
+    expect(report!.flaggedCount).toBe(1)
+  })
+
+  it('returns null (never guesses) when the line counts disagree', async () => {
+    mockCreate.mockResolvedValue(completion('1. only one line back'))
+    expect(await backTranslationReport(['a', 'b'], ['x', 'y'], 'es')).toBeNull()
+  })
+
+  it('returns null on an LLM failure — the review proceeds without the report', async () => {
+    mockCreate.mockRejectedValue(new Error('LLM down'))
+    expect(await backTranslationReport(['a'], ['x'], 'es')).toBeNull()
   })
 })
 

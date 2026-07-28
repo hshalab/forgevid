@@ -9,8 +9,8 @@ import { withRenderSlot } from '@/lib/render-semaphore';
 import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
 import { hasLlmKey } from '@/lib/ai/llm';
 import { resolveVoiceIdForUser } from '@/lib/cloned-voices';
-import { localizedPresetScenes } from '@/lib/localize';
-import { NARRATION_LANGUAGE_NAMES, type NarrationLanguage } from '@/lib/video-generator';
+import { backTranslationReport, localizedPresetScenes } from '@/lib/localize';
+import { NARRATION_LANGUAGE_NAMES, spokenLine, type NarrationLanguage } from '@/lib/video-generator';
 
 /**
  * POST /api/videos/[videoId]/localize — a new video in another language,
@@ -95,6 +95,28 @@ export async function POST(req: NextRequest, props: { params: Promise<{ videoId:
   });
   const resolvedVoiceId = await resolveVoiceIdForUser(access.userId, voiceId ?? request.voiceId);
 
+  // The localization profile's requireHumanReview flag, finally consumed:
+  // when the profile demands it and any line was actually machine-translated
+  // (identical lines mean a memory hit or a fallback — both pre-approved or
+  // unchanged), the finished render is HELD for the owner's review with a
+  // back-translation drift report attached to the review card.
+  let reviewHold: GenerationInput['reviewHold'] = null;
+  const profile = await prisma.localizationProfile
+    .findUnique({ where: { userId: access.userId }, select: { requireHumanReview: true } })
+    .catch(() => null);
+  if (profile?.requireHumanReview) {
+    const originalLines = scenes.map((scene) => spokenLine(scene));
+    const translatedLines = presetScenes.map((scene) => scene.narration ?? '');
+    const machineTranslated = translatedLines.some((line, i) => line && line !== originalLines[i]);
+    if (machineTranslated) {
+      const report = await backTranslationReport(originalLines, translatedLines, targetLanguage);
+      reviewHold = {
+        reason: `Machine translation to ${NARRATION_LANGUAGE_NAMES[targetLanguage]} requires your review (localization profile setting)`,
+        details: report ?? undefined,
+      };
+    }
+  }
+
   const genInput: GenerationInput = {
     prompt: request.prompt ?? source?.title ?? 'Localized video',
     style: request.style ?? 'modern',
@@ -116,6 +138,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ videoId:
     mediaOnly: request.mediaOnly,
     musicAssetId: request.musicAssetId,
     pip: request.pip,
+    reviewHold,
     // narrationAssetId is deliberately NOT carried over: that's the user's
     // own recorded voice in the ORIGINAL language, and translation always
     // needs fresh TTS in the target language.

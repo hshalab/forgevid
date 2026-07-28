@@ -91,6 +91,9 @@ const generateVideoSchema = z.object({
   // Caption look; 'karaoke' = word-by-word highlight (Reels/TikTok style).
   captionPreset: z.enum(['default', 'large', 'subtle', 'karaoke']).optional(),
   forgeVidEndCard: z.boolean().default(false),
+  // Best-of-N storyboards: plan 2-3 candidates, auto-score, render the
+  // winner (lib/plan-candidates.ts). Extra LLM tokens only, no render cost.
+  planCandidates: z.number().int().min(1).max(3).default(1),
   // Presenter picture-in-picture: a VIDEO MediaAsset overlaid in a corner,
   // muted — pair with narrationAssetId for the presenter's voice.
   pip: z
@@ -206,6 +209,7 @@ async function handleGenerateVideo(body: any, userId: string) {
             pip: input.pip ?? null,
             mediaOnly: input.mediaOnly,
             lowerThird: input.lowerThird ?? null,
+            planCandidates: input.planCandidates,
             // enableEmotionAware is preserved for the pipeline to honor once
             // emotion-aware generation is folded into the worker (TODO Phase 5).
             enableEmotionAware: input.enableEmotionAware ?? false,

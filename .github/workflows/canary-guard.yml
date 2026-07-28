@@ -1,0 +1,31 @@
+name: Canary guard cron
+
+# Metric-triggered automatic rollback for optimization canaries: compares
+# each CANARY artifact's evaluation outcomes against baseline and rolls
+# back regressions (lib/canary-guard.ts). Cheap no-op when nothing is
+# canarying. While the org's Actions billing lock persists,
+# scripts/canary-cron.cmd is the fallback trigger.
+
+on:
+  schedule:
+    - cron: '15 */6 * * *' # every 6 hours
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/cron/canary-guard
+        run: |
+          code=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "https://www.forgevid.com/api/cron/canary-guard" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP $code"
+          cat response.json
+          if [ "$code" != "200" ]; then
+            echo "Cron endpoint returned $code" >&2
+            exit 1
+          fi

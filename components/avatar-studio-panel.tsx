@@ -48,6 +48,10 @@ export function AvatarStudioPanel() {
       }
       if (!res.ok) throw new Error(data?.error || "Could not load avatars")
       setAvatars(data.avatars ?? [])
+      // Presenter memory: open on the presenter this user actually uses.
+      if (data.recommendedAvatarId && (data.avatars ?? []).some((a: Avatar) => a.avatarId === data.recommendedAvatarId)) {
+        setSelected((current) => current || data.recommendedAvatarId)
+      }
       setState("ready")
     } catch (error) {
       setState("error")

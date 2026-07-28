@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { allowsAvatars, getUserPlan } from '@/lib/plan';
 import { isAvatarProviderConfigured, listAvatars } from '@/lib/avatar-provider';
 
@@ -30,7 +31,39 @@ export async function GET() {
   }
 
   try {
-    return NextResponse.json({ avatars: await listAvatars() });
+    const avatars = await listAvatars();
+    // Presenter memory (the avatar arm of the learning system): the user's
+    // most-used presenter across their own completed avatar renders, so the
+    // picker opens on the presenter they actually work with. Rules-first —
+    // a plain frequency count over their own videos, never cross-user.
+    let recommendedAvatarId: string | null = null;
+    try {
+      const rows = await prisma.video.findMany({
+        where: { userId: session.user.id, status: 'COMPLETED', metadata: { contains: '"source":"avatar"' } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { metadata: true },
+      });
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        try {
+          const avatarId = JSON.parse(row.metadata ?? '{}')?.provider?.avatarId;
+          if (typeof avatarId === 'string' && avatarId) counts.set(avatarId, (counts.get(avatarId) ?? 0) + 1);
+        } catch {
+          /* malformed metadata — skip */
+        }
+      }
+      let best = 0;
+      counts.forEach((count, avatarId) => {
+        if (count > best) {
+          best = count;
+          recommendedAvatarId = avatarId;
+        }
+      });
+    } catch {
+      /* recommendation is best-effort — the list must still load */
+    }
+    return NextResponse.json({ avatars, recommendedAvatarId });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not list avatars';
     return NextResponse.json({ error: message }, { status: 502 });

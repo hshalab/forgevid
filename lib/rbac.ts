@@ -59,10 +59,12 @@ export async function getFreshSessionUser(): Promise<SessionUser | null> {
       email: true,
       role: true,
       organizationId: true,
+      status: true,
     },
   });
 
-  if (!currentUser) {
+  // A DELETED/SUSPENDED account is not a user, whatever its JWT says.
+  if (!currentUser || currentUser.status === 'DELETED' || currentUser.status === 'SUSPENDED') {
     return null;
   }
 

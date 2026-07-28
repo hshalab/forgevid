@@ -1689,3 +1689,82 @@ quota is consumed for held videos for the same reason. The fact-check +
 quality gate now BLOCK completion pending owner review — a deliberate
 change from the earlier advisory-only behavior, since the learning system
 is what makes the review loop actually usable.
+
+## 2026-07-28 — the nine remaining gaps: all closed (or honestly documented)
+
+Full implementation of the verified missing-items list:
+
+1. **Settings UI caught up with its backend**: "Export My Data" now
+   downloads a real JSON bundle (`GET /api/user/export` — profile, videos,
+   media records, usage, payments, subscriptions, consents, translation
+   memory, cloned-voice records; own-data only, no secrets). "Delete
+   Account" works (`DELETE /api/user/account`): soft delete with FULL PII
+   scrub (email tombstoned; name/password/image/metadata/mfaSecret/reset
+   tokens cleared), voices deleted at ElevenLabs first, API keys
+   deactivated, evidence-chain entry; requires the literal confirmation
+   string; 409 while any Stripe-live paid subscription exists (ACTIVE,
+   PAST_DUE, TRIALING, INCOMPLETE — a PAST_DUE row can flip back ACTIVE on
+   a webhook). The dead "Analytics Tracking" switch became the real "Help
+   improve ForgeVid" learning-consent toggle (server-backed, saves
+   immediately, optimistic-revert).
+2. **Best-of-N storyboards** (`lib/plan-candidates.ts`): plan 2-3
+   candidates (LLM tokens only), score deterministically (duration fit,
+   query concreteness, query variety, prompt-number fact coverage, scene
+   count), render only the winner; every candidate's breakdown recorded in
+   the evaluation (candidateGroupId now real). Opt-in via the AI Studio
+   "Best-of-3 storyboards" checkbox; never for preset scenes.
+3. **AI visual reviewer** (`lib/visual-review.ts`): Gemini/gpt-4o vision
+   over up to 3 sampled scene poster frames — artifacts, composition, text
+   legibility, cross-frame identity consistency. Advisory scores always
+   recorded; only an explicit critical verdict joins the review hold.
+   Fails soft everywhere; VISUAL_REVIEW=off kill switch; path-contained
+   local frame reads.
+4. **Dubbing got a UI**: Globe button on every completed video in the
+   library → language prompt → POST dub → variant lands in the library.
+5. **Template recommendations** (`lib/template-recommendations.ts` +
+   `GET /api/templates/recommendations?category=`): explainable rules-first
+   ranking (engagement with a ≥20-views floor, log-dampened adoption,
+   rating with a ≥3-ratings floor), every row carrying reason +
+   evidenceCount.
+6. **Translation review workflow**: `requireHumanReview` finally has a
+   consumer — a localization whose lines were machine-translated renders
+   normally, then HOLDS via the new `GenerationInput.reviewHold`, with a
+   back-translation drift report (`backTranslationReport` +
+   deterministic `lineSimilarity`) attached; flagged lines render on the
+   review card ("round-tripped as...").
+7. **Trained internal models — deliberately still absent** (the list's own
+   item 7): no learning-to-rank, no bandits, no fabricated ML. Rules-first
+   stays until the evidence store accumulates enough labeled outcomes;
+   every scorer built today records its inputs so that training set is
+   being assembled by normal product use.
+8. **Automatic canary rollback** (`lib/canary-guard.ts` +
+   `POST /api/cron/canary-guard`, 6-hourly workflow + Task Scheduler
+   fallback): compares canary vs baseline evaluations (≥10 samples both
+   arms, window floored at the canary's transition) and auto-rolls-back on
+   a >15-point quality drop or >20-point pass-rate drop, evidence-chained.
+   Scoped to the scene-planner artifact until evaluations carry
+   per-artifact labels — bare version strings would collide across kinds.
+9. **Avatar learning**: every avatar render records a ProviderObservation
+   (consent-gated, avatarId as the model dimension), and GET /api/avatars
+   returns the user's most-used presenter (own-data frequency count,
+   never cross-user) which the panel now preselects.
+
+**The review pass found 6 real defects before shipping — the worst: a
+DELETED account kept full platform access for up to 30 days** (JWT
+sessions are stateless; nothing checked User.status on any request — the
+session callback and getFreshSessionUser now both refuse DELETED/
+SUSPENDED, API keys are deactivated on delete, and the client signs out
+properly). Also fixed: the paid-sub deletion block missed PAST_DUE/
+TRIALING/INCOMPLETE; the canary guard compared bare version strings across
+unrelated artifact kinds AND could compare an arm against itself (v1 vs
+v1); the reviewHold reason + back-translation report were invisible to the
+user (jobs + quality-review routes now expose them, one shared
+issue-builder renders them); the PII scrub missed metadata/mfaSecret/reset
+tokens.
+
+Gates: tsc clean, **518 tests green (75 suites, up from 70/478)**, build
+clean with all 4 new routes.
+
+**User actions:** register `scripts/canary-cron.cmd` in Task Scheduler
+(line in the file) — or unlock GitHub Actions billing and all three crons
+run themselves.

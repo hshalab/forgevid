@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { allowsAvatars } from '@/lib/plan';
 import { checkGenerationQuota, settleGenerationEntitlement } from '@/lib/quota';
 import { pollProviderJobToCompletion } from '@/lib/provider-job-poll';
+import { recordProviderObservation } from '@/lib/learning-system';
+import { allowsProductImprovement } from '@/lib/learning-consent';
 import {
   createAvatarVideo,
   getAvatarVideoStatus,
@@ -115,13 +117,40 @@ export async function POST(req: NextRequest) {
     // never spend credits on a request that never actually started.
     await settleGenerationEntitlement(userId, video.id, input.duration, quota);
 
+    // Learning-layer evidence: one ProviderObservation per avatar render on
+    // the first terminal poll — same consent-gated, best-effort pattern as
+    // the Runway route. The avatarId in the model field lets the avatar
+    // preselection learn which presenters this user's renders succeed with.
+    const startedAt = Date.now();
+    let observed = false;
+    const checkStatus = async () => {
+      const status = await getAvatarVideoStatus(providerVideoId);
+      const terminal = status.status === 'failed' || (status.status === 'completed' && status.videoUrl);
+      if (!observed && terminal) {
+        observed = true;
+        if (await allowsProductImprovement(userId).catch(() => true)) {
+          void recordProviderObservation({
+            userId,
+            videoId: video.id,
+            provider: 'heygen',
+            model: input.avatarId,
+            operation: 'avatar_render',
+            latencyMs: Date.now() - startedAt,
+            succeeded: status.status === 'completed',
+            errorCode: status.status === 'failed' ? (status.error ?? 'failed').slice(0, 200) : null,
+          }).catch((error) => console.warn('[avatars/generate] observation failed:', error));
+        }
+      }
+      return status;
+    };
+
     // Polling is lightweight (no local ffmpeg), so no render slot needed.
     void pollProviderJobToCompletion({
       videoId: video.id,
       userId,
       providerName: 'heygen',
       prompt: input.script,
-      checkStatus: () => getAvatarVideoStatus(providerVideoId),
+      checkStatus,
       successCost: () => ({ avatarSeconds: input.duration }),
     });
 

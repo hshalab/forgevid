@@ -263,6 +263,19 @@ export const authOptions: NextAuthOptions = {
         if (token.organizationId) {
           ;(session.user as any).organizationId = token.organizationId as string
         }
+        // JWTs are stateless — without this, a DELETED (or SUSPENDED)
+        // account keeps a working session for the token's full 30-day life.
+        // One indexed primary-key lookup per session resolution is the cost
+        // of deletion actually meaning deletion.
+        if (token.id) {
+          const current = await prisma.user
+            .findUnique({ where: { id: token.id as string }, select: { status: true } })
+            .catch(() => null)
+          if (!current || current.status === 'DELETED' || current.status === 'SUSPENDED') {
+            ;(session as any).user = undefined
+            return session
+          }
+        }
       }
       return session
     },
