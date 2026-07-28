@@ -138,8 +138,12 @@ describe('POST /api/videos/runway/generate', () => {
       providerName: 'runway',
       prompt: 'a mountain sunrise',
     }))
+    // seedance2's measured cost (~$0.36/s) prices it at 4 credits — the
+    // weight passed to BOTH pools via checkGenerationQuota.
+    expect(mockedCheckQuota).toHaveBeenCalledWith('user-1', 10, 4)
+
     const pollArgs = mockedPoll.mock.calls[0][0]
-    expect(pollArgs.successCost()).toEqual({ runwaySeconds: 10 })
+    expect(pollArgs.successCost()).toEqual({ runwaySeconds: 10, runwayModel: 'seedance2' })
 
     // checkStatus just delegates to getRunwayTaskStatus(taskId) — Runway's
     // own status normalization (see tests/lib/runway-provider.test.ts) means
@@ -194,6 +198,8 @@ describe('GET /api/videos/runway/generate (availability pre-flight)', () => {
     // veo3.1 carries its OWN durations (4/8), distinct from gen4.5's (5/10).
     expect(body.models.find((m: { id: string }) => m.id === 'veo3.1').durations).toEqual([4, 8])
     expect(body.models.find((m: { id: string }) => m.id === 'gen4.5').durations).toEqual([5, 10])
+    // Per-model credit prices from measured provider cost: 2/3/4/5.
+    expect(body.models.map((m: { creditCost: number }) => m.creditCost)).toEqual([2, 3, 4, 5])
     expect(body.creditCost).toBe(2)
     expect(body.aspectRatios).toEqual(['16:9', '9:16', '1:1'])
     expect(body.recommendations).toEqual([])

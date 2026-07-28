@@ -25,14 +25,27 @@ export const RATES = {
   /** HeyGen video-translate (dub + lip-sync an existing video), per minute of source. */
   dubPerMinute: 2.0,
   /**
-   * Runway frontier video generation, per second of output. Only gen4.5's
-   * rate is actually published/verified; applied uniformly to every model
-   * on the curated list (lib/runway-provider.ts) since third-party (Veo/
-   * Seedance/Kling) per-model pricing through Runway's markup isn't
-   * published anywhere this could verify — conservative estimate, not an
-   * invoice, same as every other rate in this file.
+   * Runway frontier video generation, per second of output — the FALLBACK
+   * for models without a measured rate below.
    */
   runwayPerSecond: 0.12,
+  /**
+   * Per-model rates MEASURED from real credit spend on this account
+   * (2026-07-28 live verification; 1 Runway credit = $0.01):
+   *   gen4.5    60cr / 5s  → $0.12/s (matches Runway's published rate)
+   *   veo3.1   ~200cr / 8s → $0.25/s
+   *   seedance2 180cr / 5s → $0.36/s
+   *   kling3.0_pro ~205cr / 5s → $0.41/s
+   * These drive both cost estimates and the per-model credit prices in
+   * app/api/videos/runway/generate/route.ts — a flat rate here is what
+   * originally under-priced the premium models.
+   */
+  runwayPerSecondByModel: {
+    'gen4.5': 0.12,
+    'veo3.1': 0.25,
+    seedance2: 0.36,
+    'kling3.0_pro': 0.41,
+  } as Record<string, number>,
 };
 
 export interface CostInputs {
@@ -43,9 +56,12 @@ export interface CostInputs {
   avatarSeconds?: number;
   dubSeconds?: number;
   runwaySeconds?: number;
+  /** Which frontier model rendered runwaySeconds — selects its measured rate. */
+  runwayModel?: string;
 }
 
-export interface CostBreakdown extends Required<CostInputs> {
+export interface CostBreakdown extends Required<Omit<CostInputs, 'runwayModel'>> {
+  runwayModel: string | null;
   totalUsd: number;
 }
 
@@ -57,6 +73,9 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
   const avatarSeconds = Math.max(0, inputs.avatarSeconds ?? 0);
   const dubSeconds = Math.max(0, inputs.dubSeconds ?? 0);
   const runwaySeconds = Math.max(0, inputs.runwaySeconds ?? 0);
+  const runwayRate =
+    (inputs.runwayModel ? RATES.runwayPerSecondByModel[inputs.runwayModel] : undefined) ??
+    RATES.runwayPerSecond;
 
   const totalUsd =
     (gptTokens / 1000) * RATES.gptPer1kTokens +
@@ -65,7 +84,7 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
     (renderSeconds / 60) * RATES.renderPerMinute +
     (avatarSeconds / 60) * RATES.avatarPerMinute +
     (dubSeconds / 60) * RATES.dubPerMinute +
-    runwaySeconds * RATES.runwayPerSecond;
+    runwaySeconds * runwayRate;
 
   return {
     gptTokens,
@@ -75,6 +94,7 @@ export function estimateGenerationCost(inputs: CostInputs): CostBreakdown {
     avatarSeconds,
     dubSeconds,
     runwaySeconds,
+    runwayModel: inputs.runwayModel ?? null,
     totalUsd: Number(totalUsd.toFixed(6)),
   };
 }

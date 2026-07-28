@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach } from '@jest/globals'
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     usageRecord: {
-      count: jest.fn(),
+      aggregate: jest.fn(),
       create: jest.fn(),
     },
   },
@@ -55,7 +55,7 @@ describe('checkGenerationQuota', () => {
 
   it('allows a generation within the plan duration cap and monthly allowance', async () => {
     mockGetUserPlan.mockResolvedValue('free')
-    mockPrisma.usageRecord.count.mockResolvedValue(0)
+    mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: 0 } } as any)
 
     const verdict = await checkGenerationQuota('user-1', 30)
 
@@ -71,12 +71,12 @@ describe('checkGenerationQuota', () => {
 
     expect(verdict.allowed).toBe(false)
     expect(mockGetCreditBalance).not.toHaveBeenCalled()
-    expect(mockPrisma.usageRecord.count).not.toHaveBeenCalled()
+    expect(mockPrisma.usageRecord.aggregate).not.toHaveBeenCalled()
   })
 
   it('falls back to a purchased credit once the monthly limit is hit and balance > 0', async () => {
     mockGetUserPlan.mockResolvedValue('free')
-    mockPrisma.usageRecord.count.mockResolvedValue(PLAN_QUOTAS.free.videosPerMonth)
+    mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: PLAN_QUOTAS.free.videosPerMonth } } as any)
     mockGetCreditBalance.mockResolvedValue(3)
 
     const verdict = await checkGenerationQuota('user-1', 30)
@@ -89,7 +89,7 @@ describe('checkGenerationQuota', () => {
 
   it('gives a pro-plan purchased-credit render its own (higher) cap when it beats 90s', async () => {
     mockGetUserPlan.mockResolvedValue('pro')
-    mockPrisma.usageRecord.count.mockResolvedValue(PLAN_QUOTAS.pro.videosPerMonth)
+    mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: PLAN_QUOTAS.pro.videosPerMonth } } as any)
     mockGetCreditBalance.mockResolvedValue(1)
 
     const verdict = await checkGenerationQuota('user-1', 100)
@@ -101,7 +101,7 @@ describe('checkGenerationQuota', () => {
 
   it('denies with topUpAvailable when the monthly limit is hit and the balance is 0', async () => {
     mockGetUserPlan.mockResolvedValue('free')
-    mockPrisma.usageRecord.count.mockResolvedValue(PLAN_QUOTAS.free.videosPerMonth)
+    mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: PLAN_QUOTAS.free.videosPerMonth } } as any)
     mockGetCreditBalance.mockResolvedValue(0)
 
     const verdict = await checkGenerationQuota('user-1', 30)
@@ -114,7 +114,7 @@ describe('checkGenerationQuota', () => {
 
   it('fails CLOSED (denies, no credit fallback) when the usage lookup errors', async () => {
     mockGetUserPlan.mockResolvedValue('free')
-    mockPrisma.usageRecord.count.mockRejectedValue(new Error('db unreachable'))
+    mockPrisma.usageRecord.aggregate.mockRejectedValue(new Error('db unreachable'))
 
     const verdict = await checkGenerationQuota('user-1', 30)
 
@@ -127,7 +127,7 @@ describe('checkGenerationQuota', () => {
   describe('creditCost > 1 (e.g. avatar renders)', () => {
     it('denies with topUpAvailable when the balance (1) is below the cost (2)', async () => {
       mockGetUserPlan.mockResolvedValue('pro')
-      mockPrisma.usageRecord.count.mockResolvedValue(PLAN_QUOTAS.pro.videosPerMonth)
+      mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: PLAN_QUOTAS.pro.videosPerMonth } } as any)
       mockGetCreditBalance.mockResolvedValue(1)
 
       const verdict = await checkGenerationQuota('user-1', 60, 2)
@@ -140,7 +140,7 @@ describe('checkGenerationQuota', () => {
 
     it('allows with usePurchasedCredit + creditCost 2 when the balance (2) covers the cost (2)', async () => {
       mockGetUserPlan.mockResolvedValue('pro')
-      mockPrisma.usageRecord.count.mockResolvedValue(PLAN_QUOTAS.pro.videosPerMonth)
+      mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: PLAN_QUOTAS.pro.videosPerMonth } } as any)
       mockGetCreditBalance.mockResolvedValue(2)
 
       const verdict = await checkGenerationQuota('user-1', 60, 2)
@@ -148,6 +148,48 @@ describe('checkGenerationQuota', () => {
       expect(verdict.allowed).toBe(true)
       expect(verdict.usePurchasedCredit).toBe(true)
       expect(verdict.creditCost).toBe(2)
+    })
+  })
+
+  // Weighted MONTHLY pool (2026-07-28 frontier repricing): a premium
+  // generation consumes creditCost UNITS of the monthly allowance, not one
+  // flat slot — otherwise 100 kling generations (~$4.10 each) would cost
+  // ~4x the Pro subscription price inside the "included" allowance.
+  describe('weighted monthly units', () => {
+    it('a premium generation needs its FULL weight of monthly room, not just one slot', async () => {
+      mockGetUserPlan.mockResolvedValue('pro')
+      // 97/100 used → 3 units of room, but a kling generation weighs 5.
+      mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: 97 } } as any)
+      mockGetCreditBalance.mockResolvedValue(10)
+
+      const verdict = await checkGenerationQuota('user-1', 10, 5)
+
+      // Falls to purchased credits for the whole cost — never split across pools.
+      expect(verdict.allowed).toBe(true)
+      expect(verdict.usePurchasedCredit).toBe(true)
+      expect(verdict.creditCost).toBe(5)
+    })
+
+    it('a premium generation fits when the monthly pool has its full weight of room', async () => {
+      mockGetUserPlan.mockResolvedValue('pro')
+      mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: 95 } } as any)
+
+      const verdict = await checkGenerationQuota('user-1', 10, 5)
+
+      expect(verdict.allowed).toBe(true)
+      expect(verdict.usePurchasedCredit).toBeUndefined()
+      expect(verdict.creditCost).toBe(5)
+      expect(mockGetCreditBalance).not.toHaveBeenCalled()
+    })
+
+    it('treats a month with no usage rows (null sum) as zero used', async () => {
+      mockGetUserPlan.mockResolvedValue('free')
+      mockPrisma.usageRecord.aggregate.mockResolvedValue({ _sum: { quantity: null } } as any)
+
+      const verdict = await checkGenerationQuota('user-1', 30)
+
+      expect(verdict.allowed).toBe(true)
+      expect(verdict.used).toBe(0)
     })
   })
 })
@@ -183,6 +225,20 @@ describe('settleGenerationEntitlement', () => {
     })
 
     expect(mockConsumeCredit).toHaveBeenCalledWith({ userId: 'user-1', videoId: 'video-1', credits: 1 })
+  })
+
+  it('records the generation WEIGHT as the usage quantity — premium generations consume more monthly units', async () => {
+    mockPrisma.usageRecord.create.mockResolvedValue({} as any)
+
+    await settleGenerationEntitlement('user-1', 'video-kling-1', 10, {
+      ...baseVerdict,
+      creditCost: 5,
+    })
+
+    expect(mockPrisma.usageRecord.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ quantity: 5 }),
+    }))
+    expect(mockConsumeCredit).not.toHaveBeenCalled()
   })
 
   it('consumes exactly the avatar 2-credit cost when the verdict priced it in', async () => {

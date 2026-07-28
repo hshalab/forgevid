@@ -74,11 +74,29 @@ const bodySchema = z.object({
   }
 });
 
-// Worst case ($0.12/s x 10s = $1.20) against a purchased credit's ~$1.16-1.50
-// amortized value is close to break-even on its own — priced at 2 credits
-// for a real margin, since third-party (Veo/Seedance/Kling) pricing through
-// Runway's markup isn't independently verified (see lib/cost-ledger.ts).
-const RUNWAY_CREDIT_COST = 2;
+/**
+ * Per-model credit prices, derived from MEASURED provider cost (real spend,
+ * 2026-07-28 — rates in lib/cost-ledger.ts runwayPerSecondByModel) at each
+ * model's worst-case duration, kept above cost against BOTH pools: a credit's
+ * ~$1.16-1.50 retail value AND a Pro monthly unit's ~$0.99 subscription
+ * value (the weighted-quota change in lib/quota.ts makes monthly units
+ * consume this same number).
+ *
+ *   gen4.5       max $1.20 (10s x $0.12) -> 2 credits ($1.98-3.00 revenue)
+ *   veo3.1       max $2.00 ( 8s x $0.25) -> 3 credits ($2.97-4.50)
+ *   seedance2    max $3.60 (10s x $0.36) -> 4 credits ($3.96-6.00)
+ *   kling3.0_pro max $4.10 (10s x $0.41) -> 5 credits ($4.95-7.50)
+ *
+ * The original FLAT 2 credits was priced off gen4.5's rate before the
+ * others were measured — it would have lost money on every seedance/kling
+ * generation.
+ */
+const MODEL_CREDIT_COST: Record<(typeof RUNWAY_VIDEO_MODELS)[number], number> = {
+  'gen4.5': 2,
+  'veo3.1': 3,
+  seedance2: 4,
+  'kling3.0_pro': 5,
+};
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -100,10 +118,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Frontier generation shares the monthly generation quota — this is the
-  // most expensive thing the platform buys. Once exhausted, purchased
-  // credits can pick this up too, at RUNWAY_CREDIT_COST each.
-  const quota = await checkGenerationQuota(userId, input.duration, RUNWAY_CREDIT_COST);
+  // Frontier generation is the most expensive thing the platform buys —
+  // weighted at the model's own credit price against BOTH pools (monthly
+  // allowance units and purchased credits; see lib/quota.ts).
+  const creditCost = MODEL_CREDIT_COST[input.model];
+  const quota = await checkGenerationQuota(userId, input.duration, creditCost);
   if (!quota.allowed) {
     return NextResponse.json(
       { error: quota.reason, upgradeRequired: quota.upgradeRequired ?? false },
@@ -186,7 +205,9 @@ export async function POST(req: NextRequest) {
             // PER-SECOND, matching the router's predictedCostPerSecond
             // semantics — recording duration * rate here would overstate
             // cost-per-second by the clip length once evidence accumulates.
-            costUsd: status.status === 'completed' ? RATES.runwayPerSecond : null,
+            costUsd: status.status === 'completed'
+              ? RATES.runwayPerSecondByModel[input.model] ?? RATES.runwayPerSecond
+              : null,
             succeeded: status.status === 'completed',
             errorCode: status.status === 'failed' ? (status.error ?? 'failed').slice(0, 200) : null,
           }).catch((error) => console.warn('[videos/runway/generate] observation failed:', error));
@@ -205,7 +226,7 @@ export async function POST(req: NextRequest) {
       // Runway is deterministic — it renders exactly the requested
       // duration, unlike HeyGen dub's translated-speech length, which can
       // vary. Billing the request's own duration is correct here.
-      successCost: () => ({ runwaySeconds: input.duration }),
+      successCost: () => ({ runwaySeconds: input.duration, runwayModel: input.model }),
     });
 
     return NextResponse.json({
@@ -255,14 +276,16 @@ export async function GET() {
   const recommendations = await recommendFrontierModels({ priority: 'balanced' }).catch(() => []);
 
   return NextResponse.json({
-    // Each model carries its OWN valid durations — the picker constrains the
-    // duration options to whatever the chosen model actually accepts.
+    // Each model carries its OWN valid durations AND its own credit price —
+    // the picker constrains the duration options and shows the real cost of
+    // whatever the chosen model actually is.
     models: RUNWAY_VIDEO_MODELS.map((id) => ({
       id,
       label: MODEL_LABELS[id],
       durations: MODEL_CAPABILITIES[id].durations,
+      creditCost: MODEL_CREDIT_COST[id],
     })),
-    creditCost: RUNWAY_CREDIT_COST,
+    creditCost: MODEL_CREDIT_COST['gen4.5'],
     durations: EXPOSED_DURATIONS,
     aspectRatios: RUNWAY_ASPECT_RATIOS,
     recommendations,

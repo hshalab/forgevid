@@ -283,9 +283,9 @@ export default function PricingPage() {
               <div key={pack.id} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-xl font-semibold text-white">{pack.credits} extra videos</h3>
+                    <h3 className="text-xl font-semibold text-white">{pack.credits} extra credits</h3>
                     <p className="text-gray-300 text-sm">
-                      ${(pack.price / pack.credits).toFixed(2)} per video · credits never expire
+                      ${(pack.price / pack.credits).toFixed(2)} per credit · 1 credit = 1 standard video · never expire
                     </p>
                   </div>
                   <div className="text-3xl font-bold text-white">${pack.price}</div>
@@ -361,6 +361,18 @@ export default function PricingPage() {
                 Yes — the Free plan includes 2 watermarked videos per month, no card required.
                 When you want a watermark-free video without a subscription, the $
                 {CREDIT_PACKS.SINGLE.price} Single Video is a one-time purchase.
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-3">
+                Do premium AI models cost more?
+              </h3>
+              <p className="text-gray-300">
+                Yes. A standard stock-footage video is 1 credit. Premium generation types use more,
+                reflecting their real provider cost: AI Presenter videos are 2 credits, Frontier AI
+                clips are 2–5 credits depending on the model (Runway Gen-4.5 is 2; Google Veo 3.1 is 3;
+                ByteDance Seedance 2 is 4; Kling 3.0 Pro is 5), and lip-synced video dubbing is 8.
+                The exact price is always shown on the Generate button before you click.
               </p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">

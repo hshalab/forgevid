@@ -1809,3 +1809,52 @@ verification spend: ~645 credits; **~355 credits (~$3.55) remain**.
 
 Gates across the three commits: tsc clean, 522 tests green (75 suites),
 build clean, all pushed to both branches + deployed.
+
+## 2026-07-28 — pricing ROI audit: the measured rates broke the flat price; repriced
+
+The live verification's measured costs invalidated the frontier pricing on
+BOTH pools. The flat 2-credit price was set from gen4.5's published rate
+($0.12/s) before the others were measured; seedance2 came in at $0.36/s
+and kling3.0_pro at ~$0.41/s. Worst cases:
+
+- **Purchased-credit pool**: a 10s kling clip costs $4.10 against 2
+  credits' $2.32-3.00 retail → up to -$1.78 PER GENERATION.
+- **Monthly pool (worse)**: every generation type consumed ONE flat slot.
+  A Pro slot carries ~$0.99 of subscription revenue; 100 kling generations
+  inside the "included" allowance = ~$410 provider cost on $99 MRR. The
+  dub route had the same shape ($5 worst case per $0.99 slot) since it
+  shipped — the flat-slot design was the systemic hole, not one price.
+
+**Fix, both pools, one number:**
+1. **Weighted monthly units** (lib/quota.ts): checkGenerationQuota now sums
+   UsageRecord.quantity instead of counting rows; settle records the
+   generation's weight; a premium generation needing more room than the
+   month has left falls entirely to purchased credits (never split).
+   Economics now hold by construction: the same creditCost prices a
+   generation in subscription units AND purchased credits.
+2. **Per-model credit prices** (runway route), from measured worst-case
+   cost with margin against the weakest revenue unit (Pro's ~$0.99/unit):
+   gen4.5 2cr (cost ≤$1.20), veo3.1 3cr (≤$2.00), seedance2 4cr (≤$3.60),
+   kling3.0_pro 5cr (≤$4.10). Existing weights unchanged: stock 1 (cost
+   ~$0.03-0.10), avatar 2 (≤$1.25), dub 8 (≤$5).
+3. **Measured per-model rates in the cost ledger**
+   (RATES.runwayPerSecondByModel) drive both estimates and router
+   observations; CostBreakdown carries runwayModel.
+4. **Transparency**: the picker shows each model's credits; the pricing
+   page FAQ states the 1/2/2-5/8 schedule; top-up copy now says "per
+   credit · 1 credit = 1 standard video".
+
+**Competitor research** (web, 2026-07: Runway/HeyGen/Synthesia/Pictory/
+InVideo/Fliki/Freepik/Krea/Canva/OpusClip — full report in the session):
+per-model metering is the market norm (Runway 60cr/5s gen4.5 vs 160cr/4s
+Seedance Pro; Freepik 140cr Kling-720p vs 2,080cr Veo-4K; InVideo tiers a
+"generative seconds" cap). A 5s premium clip retails $0.60-2.00 across
+aggregators; ForgeVid's 2-5 credit prices sit at/above the top of that
+band — deliberate for now (margins first, solo-founder capital), worth
+revisiting with volume via duration-tiered pricing (5s vs 10s) or a
+cheaper fast-model lane (market's emerging retention lever is "unlimited
+on cheap models"). ForgeVid's subscription-plan prices themselves
+($29/30cr, $99/100cr, $299/250cr) are within market range: InVideo
+$25-120, Pictory $29-199, Synthesia $29-89, HeyGen $29-149.
+
+Gates: tsc clean, **531 tests green (76 suites, +9)**, build clean.

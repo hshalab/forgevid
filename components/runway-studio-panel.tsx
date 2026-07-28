@@ -15,6 +15,8 @@ interface RunwayModel {
   label: string
   /** The exact durations (seconds) this model accepts — the picker constrains to these. */
   durations: number[]
+  /** This model's credit price — premium models cost more (real provider cost). */
+  creditCost: number
 }
 
 interface RunwayAvailability {
@@ -161,9 +163,9 @@ export function RunwayStudioPanel() {
         <CardDescription>
           Generates brand-new AI footage from your prompt via Runway, Google
           Veo, ByteDance Seedance, or Kuaishou Kling — unlike AI Creator,
-          which assembles free stock clips. Each render uses{" "}
-          {availability.creditCost} purchased credits (or your monthly quota)
-          — nothing starts until you click Generate.
+          which assembles free stock clips. Each model has its own credit
+          price (shown on the button) reflecting its real provider cost —
+          nothing starts until you click Generate.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -190,7 +192,7 @@ export function RunwayStudioPanel() {
           >
             {availability.models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label}
+                {m.label} · {m.creditCost} credits
               </option>
             ))}
           </select>
@@ -220,7 +222,7 @@ export function RunwayStudioPanel() {
 
         <Button onClick={generate} disabled={generating} className="w-full">
           {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-          {generating ? "Generating…" : `Generate AI video (${availability.creditCost} credits)`}
+          {generating ? "Generating…" : `Generate AI video (${selectedModel?.creditCost ?? availability.creditCost} credits)`}
         </Button>
 
         {generating && <Progress value={progress} />}

@@ -57,7 +57,7 @@ export interface QuotaVerdict {
   upgradeRequired?: boolean;
   /** true when this generation must be paid for with a purchased credit, not monthly quota. */
   usePurchasedCredit?: boolean;
-  /** Set alongside usePurchasedCredit: how many purchased credits this generation costs. */
+  /** This generation's weight: monthly-allowance units consumed, or purchased credits spent. */
   creditCost?: number;
   /** Denial only: the user could unblock themselves with a Single/top-up purchase instead of upgrading. */
   topUpAvailable?: boolean;
@@ -71,11 +71,17 @@ function monthStart(now = new Date()): Date {
  * May this user start a generation of `durationSeconds`?
  * Fails CLOSED on lookup errors — an unprovable entitlement is a denial.
  *
- * `creditCost` is how many purchased credits this generation would spend IF
- * the monthly allowance is already exhausted — 1 for a standard video, more
- * for pricier generation types (e.g. avatar renders bill provider minutes,
- * so they cost 2). It has no effect at all when the monthly allowance still
- * has room; it only matters for the purchased-credit fallback below.
+ * `creditCost` is the WEIGHT of this generation in BOTH pools — how many
+ * units of the monthly allowance it consumes, and how many purchased
+ * credits it spends once the allowance is exhausted. 1 for a standard
+ * stock-footage video; more for generation types with real per-unit
+ * provider cost (avatar 2, dub 8, frontier models 2-5 by measured rate).
+ *
+ * Weighting the MONTHLY pool too is what protects margins: a Pro slot is
+ * worth ~$0.99 of subscription revenue, and a single kling3.0_pro clip
+ * costs ~$4.10 of provider spend — at flat 1-slot-per-generation, 100
+ * premium generations would cost ~4x the subscription price. Weighted,
+ * the economics hold on both pools by construction.
  */
 export async function checkGenerationQuota(
   userId: string,
@@ -99,13 +105,17 @@ export async function checkGenerationQuota(
 
   let used = 0;
   try {
-    used = await prisma.usageRecord.count({
+    // Sum of unit weights, not row count — a 5-unit premium generation
+    // consumes 5 of the month's allowance, not 1.
+    const aggregate = await prisma.usageRecord.aggregate({
+      _sum: { quantity: true },
       where: {
         userId,
         action: GENERATION_ACTION,
         timestamp: { gte: monthStart() },
       },
     });
+    used = aggregate._sum.quantity ?? 0;
   } catch (error) {
     console.error('[Quota] Usage lookup failed, denying:', error);
     return {
@@ -118,7 +128,9 @@ export async function checkGenerationQuota(
     };
   }
 
-  if (used >= quota.videosPerMonth) {
+  // Not enough monthly room for THIS generation's full weight → the
+  // purchased-credit pool covers the whole cost (never split across pools).
+  if (used + creditCost > quota.videosPerMonth) {
     // Monthly allowance is spent — fall back to the purchased-credit pool
     // (never-expiring, bought via Single/top-up) before denying outright.
     // Must cover the FULL cost of this generation, not just be non-zero —
@@ -143,9 +155,9 @@ export async function checkGenerationQuota(
       limit: quota.videosPerMonth,
       maxDurationSeconds: quota.maxDurationSeconds,
       reason:
-        `Monthly limit reached (${used}/${quota.videosPerMonth} videos on the ${plan} plan). ` +
-        `This needs ${creditCost} purchased credit${creditCost === 1 ? '' : 's'} — buy a Single video ` +
-        `or a top-up pack to keep going without upgrading.`,
+        `Monthly allowance used (${used}/${quota.videosPerMonth} generation credits on the ${plan} plan; ` +
+        `this generation needs ${creditCost}). It can run on ${creditCost} purchased credit${creditCost === 1 ? '' : 's'} — ` +
+        `buy a Single video or a top-up pack to keep going without upgrading.`,
       upgradeRequired: plan !== 'enterprise' && plan !== 'custom',
       topUpAvailable: true,
     };
@@ -157,6 +169,9 @@ export async function checkGenerationQuota(
     used,
     limit: quota.videosPerMonth,
     maxDurationSeconds: quota.maxDurationSeconds,
+    // Carried so settleGenerationEntitlement records this generation's
+    // weight against the monthly pool (same number both pools).
+    creditCost,
   };
 }
 
@@ -165,6 +180,7 @@ export async function recordGenerationUsage(
   userId: string,
   videoId: string,
   durationSeconds: number,
+  units: number = 1,
 ): Promise<void> {
   try {
     await prisma.usageRecord.create({
@@ -172,7 +188,10 @@ export async function recordGenerationUsage(
         userId,
         action: GENERATION_ACTION,
         resourceType: 'video',
-        quantity: 1,
+        // The generation's weight — checkGenerationQuota sums this column,
+        // so a premium generation genuinely consumes its priced share of
+        // the monthly allowance.
+        quantity: Math.max(1, Math.round(units)),
         metadata: JSON.stringify({ videoId, durationSeconds }),
       },
     });
@@ -200,7 +219,7 @@ export async function settleGenerationEntitlement(
   durationSeconds: number,
   verdict: QuotaVerdict,
 ): Promise<void> {
-  await recordGenerationUsage(userId, videoId, durationSeconds);
+  await recordGenerationUsage(userId, videoId, durationSeconds, verdict.creditCost ?? 1);
   if (verdict.usePurchasedCredit) {
     await consumeCredit({ userId, videoId, credits: verdict.creditCost ?? 1 });
   }
