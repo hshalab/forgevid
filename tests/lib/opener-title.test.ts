@@ -30,3 +30,24 @@ describe('buildOpenerTitleFilter', () => {
     expect(buildOpenerTitleFilter('   ')).toBe('')
   })
 })
+
+import { buildLowerThirdFilter } from '@/lib/lower-third'
+
+describe('buildLowerThirdFilter — top anchor (avoids karaoke collision)', () => {
+  it('anchors from the top (positive y, not h-…) when anchorTop is set', () => {
+    const filter = buildLowerThirdFilter(
+      { title: '2022 Tesla Model 3', facts: ['$20,000', '6,000 miles'] },
+      { anchorTop: true, marginTop: 90 },
+    )
+    // Title y is a plain top offset, never the bottom-anchored h-… form.
+    expect(filter).toContain('y=90:')
+    expect(filter).not.toContain('y=h-')
+    expect(filter).toContain('2022 Tesla Model 3')
+    expect(filter).toContain('$20\,000') // comma escaped for the filtergraph
+  })
+
+  it('stays bottom-anchored (h-…) by default', () => {
+    const filter = buildLowerThirdFilter({ title: 'X', facts: ['$1'] })
+    expect(filter).toContain('y=h-')
+  })
+})

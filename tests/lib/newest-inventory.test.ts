@@ -59,3 +59,18 @@ describe('findFirstVehicleUrl', () => {
     expect(findFirstVehicleUrl(html, INDEX)).toBeNull()
   })
 })
+
+describe('findInventoryIndexUrl — feed/sub-view exclusion', () => {
+  it('skips /inventory/feed and picks the clean inventory index', () => {
+    const html = `
+      <a href="/inventory/feed/">XML feed</a>
+      <a href="/inventory/">Browse Inventory</a>
+      <a href="/inventory/filter/suv">SUVs</a>`
+    expect(findInventoryIndexUrl(html, BASE)).toBe('https://dealer.example.com/inventory/')
+  })
+
+  it('never returns an rss/xml/api/sitemap endpoint even if it is the only inventory link', () => {
+    const html = `<a href="/inventory/feed.xml">feed</a>`
+    expect(findInventoryIndexUrl(html, BASE)).toBeNull()
+  })
+})

@@ -46,12 +46,19 @@ function hrefsIn(html: string, base: string): string[] {
   return out;
 }
 
+/** Feed/data endpoints that contain an inventory hint but are NOT browsable pages. */
+const NON_PAGE = /\/(feed|rss|xml|sitemap|api|json|export|\.xml|\.json|\.rss)/i;
+
 /** The inventory-index URL a homepage links to, or null. Pure; pinned by tests. */
 export function findInventoryIndexUrl(homepageHtml: string, baseUrl: string): string | null {
-  const links = hrefsIn(homepageHtml, baseUrl);
+  const links = hrefsIn(homepageHtml, baseUrl).filter((link) => !NON_PAGE.test(new URL(link).pathname));
   for (const hint of INVENTORY_HINTS) {
-    const hit = links.find((link) => new URL(link).pathname.toLowerCase().includes(hint));
-    if (hit) return hit;
+    const matches = links.filter((link) => new URL(link).pathname.toLowerCase().includes(hint));
+    if (matches.length) {
+      // Prefer the shortest matching path (…/inventory over …/inventory/feed
+      // /…/inventory/filter/foo) — the clean index, not a sub-view.
+      return matches.sort((a, b) => new URL(a).pathname.length - new URL(b).pathname.length)[0];
+    }
   }
   return null;
 }
@@ -80,18 +87,20 @@ export function findFirstVehicleUrl(inventoryHtml: string, baseUrl: string): str
  * Resolve the freshest-arrival URL for a dealer site. Returns the vehicle
  * detail URL, or the original site URL on ANY failure.
  */
-export async function newestArrivalUrl(siteUrl: string): Promise<{ url: string; isVehiclePage: boolean }> {
+export async function newestArrivalUrl(
+  siteUrl: string,
+): Promise<{ url: string; isVehiclePage: boolean; inventoryUrl: string | null }> {
   try {
     const homepage = await safeFetch(siteUrl, { maxBytes: 1_500_000, timeoutMs: 12_000 });
     const inventoryUrl = findInventoryIndexUrl(homepage.body.toString('utf8'), homepage.finalUrl);
-    if (!inventoryUrl) return { url: siteUrl, isVehiclePage: false };
+    if (!inventoryUrl) return { url: siteUrl, isVehiclePage: false, inventoryUrl: null };
 
     const inventory = await safeFetch(inventoryUrl, { maxBytes: 1_500_000, timeoutMs: 12_000 });
     const vehicleUrl = findFirstVehicleUrl(inventory.body.toString('utf8'), inventory.finalUrl);
-    if (!vehicleUrl) return { url: siteUrl, isVehiclePage: false };
+    if (!vehicleUrl) return { url: siteUrl, isVehiclePage: false, inventoryUrl };
 
-    return { url: vehicleUrl, isVehiclePage: true };
+    return { url: vehicleUrl, isVehiclePage: true, inventoryUrl };
   } catch {
-    return { url: siteUrl, isVehiclePage: false };
+    return { url: siteUrl, isVehiclePage: false, inventoryUrl: null };
   }
 }

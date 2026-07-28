@@ -50,6 +50,39 @@ function parseArgs() {
   };
 }
 
+const ASPECT_DIMS: Record<'9:16' | '16:9' | '1:1', [number, number]> = {
+  '9:16': [1080, 1920],
+  '16:9': [1920, 1080],
+  '1:1': [1080, 1080],
+};
+
+/**
+ * Pre-render each photo to the exact output aspect with a blurred, scaled-to-
+ * cover copy behind the sharp scaled-to-fit foreground. Eliminates the black
+ * letterbox bars a landscape inventory photo gets in a 9:16 frame. Fail-open:
+ * a photo that won't convert is passed through unchanged.
+ */
+async function blurFillPhotos(photos: string[], aspect: '9:16' | '16:9' | '1:1'): Promise<string[]> {
+  const fs = await import('fs');
+  const { spawnSync } = await import('child_process');
+  const ffmpeg = process.env.FFMPEG_PATH || (await import('ffmpeg-static')).default || 'ffmpeg';
+  const [w, h] = ASPECT_DIMS[aspect];
+  const out: string[] = [];
+  for (const src of photos) {
+    const dst = src.replace(/\.[a-z0-9]+$/i, '') + `.fill${w}x${h}.jpg`;
+    const filter =
+      `[0:v]split=2[bg][fg];` +
+      `[bg]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},gblur=sigma=24[bgb];` +
+      `[fg]scale=${w}:${h}:force_original_aspect_ratio=decrease[fgs];` +
+      `[bgb][fgs]overlay=(W-w)/2:(H-h)/2,format=yuv420p`;
+    const r = spawnSync(ffmpeg as string, ['-y', '-i', src, '-filter_complex', filter, '-frames:v', '1', dst], {
+      encoding: 'utf8',
+    });
+    out.push(r.status === 0 && fs.existsSync(dst) ? dst : src);
+  }
+  return out;
+}
+
 /** Split one narration into n roughly word-balanced sentence chunks. */
 function splitNarration(text: string, n: number): string[] {
   const sentences = text.match(/[^.!?]+[.!?]+/g)?.map((s) => s.trim()) ?? [text];
@@ -106,6 +139,7 @@ async function main() {
   const { createLlmClient, llmModel } = await import('../lib/ai/llm');
   const { safeFetch, withDefaultScheme } = await import('../lib/safe-fetch');
   const { resolveSceneClips, assembleVideo } = await import('../lib/video-generator');
+  const { resolveListingForSample } = await import('../lib/listing-extract');
   const { synthesizeSceneVoiceovers } = await import('../lib/voiceover');
   const { CAPTION_PRESETS } = await import('../lib/captions');
 
@@ -177,31 +211,60 @@ async function main() {
       : `      only ${localImages.length} usable image(s) — falling back to stock car footage (pitch still personalized in words)`,
   );
 
+  // Listing mode (the strongest pitch): if this is a specific vehicle or
+  // property page, show THAT item's real photos with its price/mileage burned
+  // in — a real listing ad, not a generic slideshow. Language-independent, so
+  // harvest once. Falls through to site-images/stock when there's no listing.
+  let listing: Awaited<ReturnType<typeof resolveListingForSample>> = null;
+  if (opts.vertical === 'auto' || opts.vertical === 'realestate') {
+    console.log('[3b]  Harvesting their ACTUAL inventory (photos + price + facts) ...');
+    listing = await resolveListingForSample(url, opts.vertical);
+    console.log(
+      listing
+        ? `      REAL INVENTORY: ${listing.localPhotos.length} photos` +
+            `${listing.isSingleListing ? ' of one listing' : ' from their inventory grid'}` +
+            `${listing.price ? `, ${listing.price}` : ''}${listing.keyFact ? `, ${listing.keyFact}` : ''}`
+        : '      no scrapable inventory (JS-rendered/blocked) — using site images / stock instead',
+    );
+  }
+
   const results: string[] = [];
   for (const lang of opts.langs) {
     console.log(`[4/5] Rendering ${lang.toUpperCase()} sample ...`);
     const chunks = splitNarration(narrations[lang], 4);
 
+    // The photo set for this render: the actual listing's photos win, then
+    // the site's own images, then stock.
+    const rawPhotos = listing ? listing.localPhotos : usingSiteImages ? localImages : null;
+    // Normalize every own-photo to the exact output aspect with a blurred
+    // fill BEHIND it — dealer inventory shots are landscape cutouts (often
+    // on white), which otherwise letterbox with black bars in a 9:16 frame.
+    // A blurred cover reads as produced; Ken Burns then zooms the filled image.
+    const ownPhotos = rawPhotos ? await blurFillPhotos(rawPhotos, opts.aspect) : null;
+
     let resolved: any[];
-    if (usingSiteImages) {
+    if (ownPhotos) {
       resolved = chunks.map((narration, i) => ({
         id: `scene-${i + 1}`,
         index: i,
         description: narration,
         narration,
-        searchQuery: 'dealer site image',
+        searchQuery: listing ? 'listing photo' : 'dealer site image',
         keywords: [],
         duration: 2,
         visualElements: [],
-        clipUrl: localImages[i % localImages.length],
-        matchedQuery: 'site image',
+        clipUrl: ownPhotos[i % ownPhotos.length],
+        matchedQuery: listing ? 'listing photo' : 'site image',
         mediaType: 'image' as const,
       }));
     } else {
+      // Tight, unambiguous queries — the old "salesman handshake car" /
+      // "agent keys" drifted to real-estate closing stock (a car dealer got
+      // a house SOLD sign). These stay firmly in their own vertical.
       const FALLBACKS: Record<Vertical, string[]> = {
-        auto: ['car dealership lot', 'car showroom', 'salesman handshake car', 'happy customer car'],
-        realestate: ['modern house exterior', 'modern house interior', 'real estate agent keys', 'sold sign house'],
-        ecom: ['online shopping phone', 'product photography studio', 'warehouse packages', 'person smiling phone'],
+        auto: ['used cars dealership lot', 'car showroom interior', 'suv driving road', 'sports car close up'],
+        realestate: ['modern house exterior', 'luxury home interior', 'modern kitchen home', 'residential home tour'],
+        ecom: ['product photography studio', 'unboxing product', 'online store packaging', 'product on table'],
       };
       const FALLBACK_QUERIES = FALLBACKS[opts.vertical];
       const planned = chunks.map((narration, i) => ({
@@ -217,6 +280,19 @@ async function main() {
       resolved = await resolveSceneClips(planned as any, opts.aspect);
     }
 
+    // The listing's price + key fact burned in as a lower third — the "extra
+    // valuable info" a real customer wants. Only in listing mode; the brand
+    // opener carries the non-listing renders.
+    const listingLowerThird =
+      listing && (listing.price || listing.keyFact)
+        ? {
+            title: (listing.title ?? brand).slice(0, 80),
+            facts: [listing.price, listing.keyFact].filter((f): f is string => Boolean(f)),
+            start: 0.5,
+            duration: 4,
+          }
+        : null;
+
     const sceneVoiceovers = await synthesizeSceneVoiceovers(
       resolved.map((s: any) => ({ id: s.id, description: s.narration })),
       process.env.ELEVENLABS_VOICE_ID ?? null,
@@ -224,8 +300,13 @@ async function main() {
     if (!sceneVoiceovers) throw new Error('narration synthesis failed (ELEVENLABS_API_KEY?)');
 
     const { videoUrl } = await assembleVideo(resolved as any, ['voiceover', 'subtitles'], opts.aspect, {
-      // Big animated brand-name opener (Bebas Neue) — the produced-ad look.
-      openerTitle: brand,
+      // Listing mode shows the price/facts lower third; otherwise the big
+      // animated brand-name opener (Bebas Neue) carries the open. (The
+      // assembler skips the opener when a lower third is present.)
+      ...(listingLowerThird ? { lowerThird: listingLowerThird } : { openerTitle: brand }),
+      // Ken Burns motion + a subtle grade so still photos read as a produced
+      // ad, not a slideshow.
+      visualStyle: opts.vertical === 'auto' ? 'energetic' : 'cinematic',
       sceneVoiceovers,
       voiceId: process.env.ELEVENLABS_VOICE_ID ?? null,
       transition: null,
@@ -246,7 +327,8 @@ async function main() {
     console.log(`      done: ${outPath}`);
 
     if (opts.email) {
-      await emailSample(opts.email, host, brand, lang, outPath, usingSiteImages, opts.vertical);
+      const footage = listing ? 'listing' : usingSiteImages ? 'site' : 'stock';
+      await emailSample(opts.email, host, brand, lang, outPath, footage, opts.vertical, listing);
     }
   }
 
@@ -264,8 +346,9 @@ async function emailSample(
   brand: string,
   lang: Lang,
   filePath: string,
-  usedSiteImages: boolean,
+  footage: 'listing' | 'site' | 'stock',
   vertical: Vertical,
+  listing: { title: string | null; price: string | null; keyFact: string | null } | null,
 ) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS || process.env.SMTP_PASS.includes('PASTE')) {
     console.log('      email: SMTP not configured — clip is on disk');
@@ -314,9 +397,13 @@ async function emailSample(
       subject: `🎯 [PROSPECT] [${lang.toUpperCase()}] ${host}`,
       text:
         `DM message (copy-paste, then attach the clip):\n\n${DM_TEMPLATES[vertical][lang](brand)}\n\n` +
-        (usedSiteImages
-          ? 'Footage: THEIR OWN site images — lead with that in the conversation.'
-          : 'Footage: stock fallback (their site blocked image downloads) — the words are still grounded in their site.') +
+        (footage === 'listing'
+          ? `Footage: a REAL listing off their site${listing?.title ? ` — "${listing.title}"` : ''}` +
+            `${listing?.price ? `, ${listing.price}` : ''}${listing?.keyFact ? `, ${listing.keyFact}` : ''}, ` +
+            `with the price/details burned in. LEAD WITH THIS — "I made a video of the exact car/home you have listed."`
+          : footage === 'site'
+            ? 'Footage: THEIR OWN site images — lead with that in the conversation.'
+            : 'Footage: stock fallback (their site blocked image downloads) — the words are still grounded in their site.') +
         (attach
           ? attachPath === filePath
             ? ''

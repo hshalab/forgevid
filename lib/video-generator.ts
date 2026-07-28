@@ -227,9 +227,18 @@ export type RenderQuality = 'draft' | 'full' | '4k';
 
 /** scale+pad filter that fits source footage into the target frame. */
 function fitFilterFor(width: number, height: number): string {
+  // Blurred-cover fill instead of black bars: a landscape car photo in a 9:16
+  // frame (or any aspect mismatch) used to letterbox with hard black edges,
+  // which reads as amateur. Now a blurred, scaled-to-cover copy fills the
+  // frame behind the sharp scaled-to-fit foreground — the standard produced
+  // look for portrait video from wide source. Self-contained filterchain
+  // (one in, one out via labels) so it composes wherever fit was used.
   return (
-    `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1`
+    `split=2[fitbg][fitfg];` +
+    `[fitbg]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+    `crop=${width}:${height},gblur=sigma=24[fitbgb];` +
+    `[fitfg]scale=${width}:${height}:force_original_aspect_ratio=decrease[fitfgs];` +
+    `[fitbgb][fitfgs]overlay=(W-w)/2:(H-h)/2,setsar=1`
   );
 }
 
@@ -1475,6 +1484,10 @@ export async function assembleVideo(
           // captionColor is already hex-validated by resolveBranding, so the
           // accent bar can safely reuse it and match the brand.
           accentColor: branding?.captionColor ?? undefined,
+          // Karaoke captions own the bottom of the frame — put the lower
+          // third (e.g. a listing's price/mileage) at the top so they don't
+          // collide (they did, visibly, in the first prospect samples).
+          anchorTop: options.captionAnimation === 'karaoke',
         })
       : '';
 

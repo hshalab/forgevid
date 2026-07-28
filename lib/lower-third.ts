@@ -44,6 +44,14 @@ export interface LowerThirdStyle {
   accentColor?: string;
   boxOpacity?: number;
   fontFile?: string | null;
+  /**
+   * Anchor the block to the TOP of the frame instead of the bottom — use
+   * when bottom-anchored karaoke captions would otherwise collide with it
+   * (every prospect sample). Distance from the top comes from marginTop.
+   */
+  anchorTop?: boolean;
+  /** Distance from the top edge, px (anchorTop only). */
+  marginTop?: number;
 }
 
 /** A colour is only allowed through if it is a hex value or a safe name. */
@@ -95,31 +103,47 @@ export function buildLowerThirdFilter(
   const facts = formatFacts(lowerThird.facts ?? []);
   const filters: string[] = [];
 
-  // The title sits above the facts; both are drawn from the bottom up so the
-  // block grows upward and never collides with the captions below it.
-  const factsY = marginBottom;
-  const titleY = marginBottom + (facts ? factsSize + 22 : 0);
-
   const box = (size: number) =>
     opacity > 0 ? `box=1:boxcolor=black@${opacity.toFixed(2)}:boxborderw=${Math.round(size * 0.35)}:` : '';
 
+  // y-expressions per anchor. Bottom (default): drawn from the bottom up so
+  // the block grows upward, never colliding with captions below it. Top:
+  // the title sits at marginTop and the facts below it — used when the
+  // bottom is already claimed by karaoke captions.
+  const anchorTop = style.anchorTop ?? false;
+  let titleYExpr: string;
+  let factsYExpr: string;
+  let barYExpr: string;
+  if (anchorTop) {
+    const marginTop = style.marginTop ?? 90;
+    titleYExpr = `${marginTop}`;
+    factsYExpr = `${marginTop + titleSize + 12}`;
+    barYExpr = `${marginTop}`;
+  } else {
+    const factsY = marginBottom;
+    const titleY = marginBottom + (facts ? factsSize + 22 : 0);
+    titleYExpr = `h-${titleY + titleSize}`;
+    factsYExpr = `h-${factsY + factsSize}`;
+    barYExpr = `h-${titleY + titleSize}`;
+  }
+
   // A slim accent bar to the left of the text. drawtext can't draw a rectangle,
   // so it draws a run of full-block glyphs, which every font we ship has.
-  const barHeight = titleY - factsY + titleSize + (facts ? factsSize : 0);
+  const barHeight = titleSize + (facts ? factsSize + 12 : 0);
   filters.push(
     `drawtext=${fontOpt}text='█':fontsize=${Math.round(barHeight * 0.9)}:fontcolor=${accentColor}:` +
-      `x=${marginLeft - 26}:y=h-${titleY + titleSize}:${enable}`,
+      `x=${marginLeft - 26}:y=${barYExpr}:${enable}`,
   );
 
   filters.push(
     `drawtext=${fontOpt}text='${escapeDrawText(title)}':fontsize=${titleSize}:fontcolor=${fontColor}:` +
-      `${box(titleSize)}x=${marginLeft}:y=h-${titleY + titleSize}:${enable}`,
+      `${box(titleSize)}x=${marginLeft}:y=${titleYExpr}:${enable}`,
   );
 
   if (facts) {
     filters.push(
       `drawtext=${fontOpt}text='${escapeDrawText(facts)}':fontsize=${factsSize}:fontcolor=${fontColor}:` +
-        `${box(factsSize)}x=${marginLeft}:y=h-${factsY + factsSize}:${enable}`,
+        `${box(factsSize)}x=${marginLeft}:y=${factsYExpr}:${enable}`,
     );
   }
 
