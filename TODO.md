@@ -1768,3 +1768,44 @@ clean with all 4 new routes.
 **User actions:** register `scripts/canary-cron.cmd` in Task Scheduler
 (line in the file) — or unlock GitHub Actions billing and all three crons
 run themselves.
+
+## 2026-07-28 — Runway funded + live-verified end-to-end (all 4 models)
+
+The user added API credits (1,000) to the Runway DEV organization
+(dev.runwayml.com — a SEPARATE wallet from the consumer app.runwayml.com
+subscription; credits do NOT transfer between them). Frontier AI is now
+genuinely live-fireable, and running real paid generations immediately
+caught bugs no amount of doc-reading would have:
+
+**Three layers of "available" that are NOT the same thing** (each caught by
+a real API call, documented here so it's never re-learned the hard way):
+- `GET /v1/organization` model LIST ≠ `text_to_video`-valid. `gen4_turbo`
+  is in the org list but the endpoint 400-rejects it (it's not a
+  text-to-video model). Its validation response NAMES the valid set.
+- endpoint-valid ≠ provisioned-to-your-org. `gen3a_turbo` is in the valid
+  set but 403s "not available" for this org. So a model must pass BOTH
+  checks; the only safe proof is a real generation.
+- one ratio/duration does NOT fit all models. Each has its own:
+  gen4.5/seedance2 → 1280:720, durations 5/10; veo3.1 → durations 4/8
+  only; kling3.0_pro → HD ratios (1920:1080) only. A single shared map is
+  what made the first attempts error.
+
+**Fix:** `MODEL_CAPABILITIES` in lib/runway-provider.ts holds each model's
+own ratioByAspect + allowed durations; buildTextToVideoPayload +
+route zod + GET pre-flight + the panel all derive from it, so the picker
+can never present a combination the API rejects (pinned by tests, incl.
+"veo3.1 rejects gen4.5's duration 5").
+
+**All four exposed models verified end-to-end on this account** (real task
+→ SUCCEEDED → CloudFront video URL): gen4.5, Google veo3.1, ByteDance
+seedance2, Kuaishou kling3.0_pro — one per frontier provider, all through
+the single RUNWAY_API_KEY (no Google/ByteDance/Kuaishou accounts needed).
+
+**Real pricing learned** (1 credit = $0.01): gen4.5 60cr/5s ($0.12/s, matches
+published); seedance2 180cr/5s ($0.36/s); veo3.1 + kling3.0_pro premium
+(~$2 each). This is exactly why the route prices every frontier gen at a
+flat 2 purchased credits rather than trusting per-model rates. Total
+verification spend: ~645 credits; **~355 credits (~$3.55) remain**.
+
+Gates across the three commits: tsc clean, 522 tests green (75 suites),
+build clean, all pushed to both branches + deployed.
