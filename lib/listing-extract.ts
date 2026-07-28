@@ -16,7 +16,7 @@
 import fs from 'fs';
 import path from 'path';
 import { safeFetch } from './safe-fetch';
-import { newestArrivalUrl } from './newest-inventory';
+import { findAllVehicleUrls, findInventoryIndexUrl, newestArrivalUrl } from './newest-inventory';
 
 export interface ListingFacts {
   title: string | null;
@@ -146,6 +146,76 @@ export interface ResolvedListing extends ListingFacts {
   localPhotos: string[];
   /** True = a single vehicle/property with its own price; false = an inventory grid of real items. */
   isSingleListing: boolean;
+}
+
+/** One crawled inventory item in the shape /api/vehicles/batch already accepts. */
+export interface CrawledItem {
+  ref: string;
+  title: string;
+  price: string | null;
+  keyFact: string | null;
+  photoUrls: string[];
+  sourceUrl: string;
+}
+
+export interface CrawlResult {
+  items: CrawledItem[];
+  /** URLs found but not harvested (JS-rendered / blocked) — reported, never hidden. */
+  skipped: number;
+  inventoryUrl: string | null;
+}
+
+/**
+ * Crawl a customer's own website into a list of inventory items — the "just
+ * give us your website" on-ramp for dealers/brokers who have no structured
+ * DMS/MLS feed. Homepage -> inventory index -> up to `maxItems` vehicle/
+ * property detail pages, each harvested for its title + price + key fact +
+ * photo URLs (verbatim; nothing invented).
+ *
+ * Static fetch only — JS-rendered inventory yields nothing and the item is
+ * counted in `skipped`, so the caller can honestly tell the customer how
+ * much of their lot was captured and suggest a connected feed for the rest.
+ */
+export async function crawlInventoryFromWebsite(
+  siteUrl: string,
+  vertical: 'auto' | 'realestate',
+  maxItems = 20,
+  photosPerItem = 6,
+): Promise<CrawlResult> {
+  try {
+    const homepage = await safeFetch(siteUrl, { maxBytes: 2_000_000, timeoutMs: 15_000 });
+    const inventoryUrl = findInventoryIndexUrl(homepage.body.toString('utf8'), homepage.finalUrl);
+    if (!inventoryUrl) return { items: [], skipped: 0, inventoryUrl: null };
+
+    const index = await safeFetch(inventoryUrl, { maxBytes: 2_000_000, timeoutMs: 15_000 });
+    const vehicleUrls = findAllVehicleUrls(index.body.toString('utf8'), index.finalUrl).slice(0, maxItems);
+
+    const items: CrawledItem[] = [];
+    let skipped = 0;
+    for (const url of vehicleUrls) {
+      const listing = await harvestListing(url, vertical, photosPerItem);
+      if (!listing || listing.photoUrls.length === 0) {
+        skipped++;
+        // Clean any partial local downloads for a skipped item.
+        for (const p of listing?.localPhotos ?? []) { try { fs.unlinkSync(p); } catch { /* ignore */ } }
+        continue;
+      }
+      // Free the local copies — the batch pipeline re-fetches by URL through
+      // its own SSRF guard; we only needed harvestListing's ≥3-photo gate.
+      for (const p of listing.localPhotos) { try { fs.unlinkSync(p); } catch { /* ignore */ } }
+      items.push({
+        ref: url,
+        title: listing.title ?? 'Vehicle',
+        price: listing.price,
+        keyFact: listing.keyFact,
+        photoUrls: listing.photoUrls.slice(0, photosPerItem),
+        sourceUrl: url,
+      });
+    }
+    return { items, skipped, inventoryUrl };
+  } catch {
+    return { items: [], skipped: 0, inventoryUrl: null };
+  }
 }
 
 /**

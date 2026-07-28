@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals'
-import { findFirstVehicleUrl, findInventoryIndexUrl } from '@/lib/newest-inventory'
+import { findAllVehicleUrls, findFirstVehicleUrl, findInventoryIndexUrl } from '@/lib/newest-inventory'
 
 const BASE = 'https://dealer.example.com/'
 
@@ -72,5 +72,34 @@ describe('findInventoryIndexUrl — feed/sub-view exclusion', () => {
   it('never returns an rss/xml/api/sitemap endpoint even if it is the only inventory link', () => {
     const html = `<a href="/inventory/feed.xml">feed</a>`
     expect(findInventoryIndexUrl(html, BASE)).toBeNull()
+  })
+})
+
+describe('findAllVehicleUrls', () => {
+  const INDEX = 'https://dealer.example.com/inventory'
+  it('returns every distinct vehicle detail link in page order (newest first)', () => {
+    const html = `
+      <a href="/inventory">All</a>
+      <a href="/inventory/2024-toyota-rav4-111">RAV4</a>
+      <a href="/inventory/2019-honda-civic-222">Civic</a>
+      <a href="/inventory/2024-toyota-rav4-111?utm=x">RAV4 dup</a>
+      <a href="/vdp/2021-ford-f150-333">F150</a>`
+    expect(findAllVehicleUrls(html, INDEX)).toEqual([
+      'https://dealer.example.com/inventory/2024-toyota-rav4-111',
+      'https://dealer.example.com/inventory/2019-honda-civic-222',
+      'https://dealer.example.com/vdp/2021-ford-f150-333',
+    ])
+  })
+  it('excludes the index, feeds, and off-domain links', () => {
+    const html = `
+      <a href="/inventory">Index</a>
+      <a href="/inventory/feed.xml">Feed</a>
+      <a href="https://cars.other.com/vehicle/9">Syndicated</a>
+      <a href="/inventory/2020-kia-soul-44">Real</a>`
+    expect(findAllVehicleUrls(html, INDEX)).toEqual(['https://dealer.example.com/inventory/2020-kia-soul-44'])
+  })
+  it('findFirstVehicleUrl returns the first of findAllVehicleUrls', () => {
+    const html = `<a href="/inventory/2024-a-1">A</a><a href="/inventory/2023-b-2">B</a>`
+    expect(findFirstVehicleUrl(html, INDEX)).toBe('https://dealer.example.com/inventory/2024-a-1')
   })
 })

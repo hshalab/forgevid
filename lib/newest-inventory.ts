@@ -64,23 +64,37 @@ export function findInventoryIndexUrl(homepageHtml: string, baseUrl: string): st
 }
 
 /**
+ * EVERY vehicle-detail link on an inventory page, in page order, deduped.
+ * The customer "just my website" on-ramp crawls these to build a whole
+ * inventory. Pure; pinned by tests.
+ */
+export function findAllVehicleUrls(inventoryHtml: string, baseUrl: string): string[] {
+  const links = hrefsIn(inventoryHtml, baseUrl);
+  const inventoryPath = new URL(baseUrl).pathname.toLowerCase();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const link of links) {
+    const url = new URL(link);
+    const path = url.pathname.toLowerCase();
+    if (path === inventoryPath || path === '/') continue; // the index itself
+    if (NON_PAGE.test(path)) continue;
+    const looksLikeVehicle =
+      VEHICLE_HINTS.some((hint) => path.includes(hint)) || YEAR_MAKE_PATTERN.test(path);
+    if (!looksLikeVehicle || path.split('/').filter(Boolean).length < 2) continue;
+    // Dedup on path (ignore tracking query strings) so ?utm=… duplicates collapse.
+    if (seen.has(path)) continue;
+    seen.add(path);
+    out.push(link);
+  }
+  return out;
+}
+
+/**
  * The first vehicle-detail link on an inventory page — the newest arrival
  * under the newest-first convention. Pure; pinned by tests.
  */
 export function findFirstVehicleUrl(inventoryHtml: string, baseUrl: string): string | null {
-  const links = hrefsIn(inventoryHtml, baseUrl);
-  const inventoryPath = new URL(baseUrl).pathname.toLowerCase();
-  for (const link of links) {
-    const path = new URL(link).pathname.toLowerCase();
-    if (path === inventoryPath || path === '/') continue; // the index itself
-    const looksLikeVehicle =
-      VEHICLE_HINTS.some((hint) => path.includes(hint)) || YEAR_MAKE_PATTERN.test(path);
-    // A real detail page is deeper than the index, not a filter/sort query.
-    if (looksLikeVehicle && path.split('/').filter(Boolean).length >= 2) {
-      return link;
-    }
-  }
-  return null;
+  return findAllVehicleUrls(inventoryHtml, baseUrl)[0] ?? null;
 }
 
 /**
