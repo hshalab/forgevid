@@ -1,0 +1,19 @@
+Bundled fonts — both licensed under the SIL Open Font License, Version 1.1
+(https://openfontlicense.org). The OFL permits bundling, embedding, and
+commercial use; it requires this notice to accompany the font files.
+
+1. Montserrat ExtraBold (Montserrat-ExtraBold.ttf)
+   Copyright 2011 The Montserrat Project Authors
+   (https://github.com/JulietaUla/Montserrat)
+   Licensed under the SIL Open Font License, Version 1.1.
+
+2. Bebas Neue (BebasNeue-Regular.ttf)
+   Copyright 2019 The Bebas Neue Project Authors
+   (https://github.com/dharmatype/Bebas-Neue)
+   Licensed under the SIL Open Font License, Version 1.1.
+
+These fonts render ForgeVid's burned-in captions and lower-thirds. They are
+not served as webfonts; they ship here so the ffmpeg drawtext/libass render
+path finds a professional display face on every platform (the previous
+fallback was whatever system font the host happened to have — DejaVu on
+Linux).

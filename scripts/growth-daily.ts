@@ -82,7 +82,12 @@ function contactLine(row: { instagram: string; whatsapp: string; email: string; 
 }
 
 function renderSample(pick: BatchPick, sourceUrl: string): { ok: boolean; detail: string } {
-  const lang = pick.row.language.toLowerCase() === 'en' ? 'en' : 'both';
+  // TTS is the scarce resource (ElevenLabs character quota): a
+  // Spanish-FIRST account gets the Spanish clip only — it's the better
+  // pitch for them anyway — and 'both' is reserved for genuinely bilingual
+  // accounts. This halves the character burn on ES rows.
+  const language = pick.row.language.toLowerCase();
+  const lang = language === 'en' ? 'en' : language === 'es' ? 'es' : 'both';
   const args = [
     'tsx',
     'scripts/prospect-sample.ts',

@@ -988,6 +988,8 @@ export interface AssembleOptions {
   captionAnimation?: 'karaoke' | null;
   /** Narration language — selects a CJK/Devanagari caption font when needed. */
   language?: NarrationLanguage;
+  /** Visual style ('modern'|'cinematic'|'energetic'|'professional') — selects the color grade. */
+  visualStyle?: string;
   /** Plan-gated branding: watermark, logo, intro/outro, caption colour/font. */
   branding?: Branding | null;
   /** Cross-fade between scenes. Pass null for hard cuts. */
@@ -1030,6 +1032,26 @@ export interface AssembleResult {
   scenes: ResolvedScene[];
   /** Post-render quality check of the local file, before it was uploaded. */
   quality: QualityReport;
+}
+
+/**
+ * Per-style color grades — subtle eq lifts that make stock footage read as
+ * intentionally produced rather than raw. Deliberately conservative values
+ * (a heavy grade on unknown source footage looks worse than none), applied
+ * BEFORE the text overlays so captions/lower-thirds stay untouched and
+ * crisp. Kill switch: VIDEO_GRADE=off.
+ */
+const STYLE_GRADES: Record<string, string> = {
+  cinematic: 'eq=contrast=1.06:saturation=1.12:brightness=0.01',
+  energetic: 'eq=contrast=1.05:saturation=1.22',
+  professional: 'eq=contrast=1.04:saturation=0.95',
+  modern: 'eq=contrast=1.04:saturation=1.10',
+};
+const DEFAULT_GRADE = 'eq=contrast=1.03:saturation=1.08';
+
+function gradeFor(style?: string): string {
+  if (process.env.VIDEO_GRADE === 'off') return '';
+  return STYLE_GRADES[(style ?? '').toLowerCase()] ?? DEFAULT_GRADE;
 }
 
 export async function assembleVideo(
@@ -1445,7 +1467,8 @@ export async function assembleVideo(
     // Split at the PiP boundary: `fit` must run before the presenter overlay,
     // but text (captions, lower third, watermark) must draw AFTER it — or the
     // presenter clip covers the captions (seen in a real frame, not theory).
-    const preOverlayFilter = fit;
+    // The color grade rides with `fit` — footage gets graded, text does not.
+    const preOverlayFilter = [fit, gradeFor(options.visualStyle)].filter(Boolean).join(',');
     const textOverlayFilter = [lowerThirdFilter, textFilter, watermarkFilter]
       .filter(Boolean)
       .join(',');
@@ -1744,6 +1767,7 @@ export async function generateVideoWithScenes(
     branding,
     transition,
     language: options.language,
+    visualStyle: options.style,
     renderQuality: options.renderQuality,
     voiceoverPath: options.voiceoverPath ?? null,
     lowerThird: options.lowerThird ?? null,

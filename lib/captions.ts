@@ -438,6 +438,11 @@ export function escapeDrawText(text: string): string {
  */
 /** Directories distros keep fonts in. Searched, not assumed. */
 const FONT_DIRS = [
+  // Bundled display fonts ship with the repo (public/fonts + OFL licenses)
+  // so every platform — the Railway image, the Windows render box, a dev
+  // laptop — resolves the SAME professional face instead of whatever the
+  // OS happens to have. Searched first.
+  path.join(process.cwd(), 'public', 'fonts'),
   '/usr/share/fonts',
   '/usr/local/share/fonts',
   '/System/Library/Fonts',
@@ -447,6 +452,10 @@ const FONT_DIRS = [
 
 /** Preferred faces, best first. Anything else is a last resort. */
 const PREFERRED = [
+  // The design face: geometric extra-bold reads like a produced ad, not a
+  // system dialog. DejaVu and friends remain as fallbacks only.
+  'montserrat-extrabold.ttf',
+  'bebasneue-regular.ttf',
   'dejavusans.ttf',
   'liberationsans-regular.ttf',
   'notosans-regular.ttf',
@@ -492,8 +501,12 @@ export function resolveCaptionFontFile(): string | null {
   }
 
   const all = FONT_DIRS.flatMap((dir) => findTtfFiles(dir));
+  // Normalize separators before matching: on Windows, path.join produces
+  // backslashes, so the old `/`-only endsWith NEVER matched a preferred
+  // face there — every Windows render silently used whatever TTF was found
+  // first. (The daily growth samples render on a Windows box.)
   const byPreference = PREFERRED.map((name) =>
-    all.find((p) => p.toLowerCase().endsWith(`/${name}`)),
+    all.find((p) => p.replace(/\\/g, '/').toLowerCase().endsWith(`/${name}`)),
   ).find(Boolean);
 
   cachedFont = byPreference ?? all[0] ?? null;
